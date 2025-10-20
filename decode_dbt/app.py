@@ -19,7 +19,7 @@ if not MOTHERDUCK_TOKEN:
     st.error("❌ Missing MotherDuck token. Set it in Streamlit secrets.")
     st.stop()
 
-MOTHERDUCK_SHARE = "dbtlearn_demo"
+MOTHERDUCK_SHARE = "decode_dbt"
 
 # ============================
 # LEARNER ID AND SCHEMA
