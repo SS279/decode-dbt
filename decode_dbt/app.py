@@ -4,7 +4,7 @@ import tempfile
 import os
 import duckdb
 import shutil
-import uuid
+import hashlib
 
 # ============================
 # APP SETUP
@@ -19,89 +19,41 @@ if not MOTHERDUCK_TOKEN:
     st.error("❌ Missing MotherDuck token. Set it in Streamlit secrets.")
     st.stop()
 
-# MotherDuck share
-MOTHERDUCK_SHARE = "decode_data"
+MOTHERDUCK_SHARE = "dbtlearn_demo"
 
 # ============================
 # LEARNER ID AND SCHEMA
 # ============================
 
-# Callback to set learner ID and schema
 def set_learner_id():
     learner_id = st.session_state["input_learner_id"].strip()
     if learner_id:
         st.session_state["learner_id"] = learner_id
-        # Deterministic schema from learner_id
-        st.session_state["learner_schema"] = f"learner_{uuid.uuid4().hex[:8]}"
+        # Deterministic schema for the learner
+        hash_str = hashlib.sha256(learner_id.encode()).hexdigest()[:8]
+        st.session_state["learner_schema"] = f"learner_{hash_str}"
 
-# Ask for learner ID only if not already set
 if "learner_id" not in st.session_state or "learner_schema" not in st.session_state:
     st.text_input(
         "👤 Enter your unique learner ID (email or username):",
         key="input_learner_id",
         on_change=set_learner_id
     )
-    st.stop()  # Stop until learner enters ID
+    st.stop()
 
-# Now these keys are guaranteed to exist
-st.write(f"✅ Learner ID: {st.session_state['learner_id']}")
-st.write(f"✅ Sandbox schema: {st.session_state['learner_schema']}")
+LEARNER_SCHEMA = st.session_state["learner_schema"]
+st.info(f"✅ Sandbox schema: `{LEARNER_SCHEMA}`")
 
 # ============================
 # LESSONS
 # ============================
 
 LESSONS = [
-    {
-        "id": "01_hello_dbt",
-        "title": "Hello dbt!",
-        "description": "Learn your first dbt model using MotherDuck.",
-        "model_file": "models/my_first_model.sql",
-        "validation": {
-            "sql": "SELECT COUNT(*) AS rowcount FROM my_first_model",
-            "expected": {"rowcount": 3}
-        }
-    },
-    {
-        "id": "02_transform_orders",
-        "title": "Transform Orders",
-        "description": "Filter, rename columns, create a derived table.",
-        "model_file": "models/transform_orders.sql",
-        "validation": {
-            "sql": "SELECT COUNT(*) AS rowcount FROM transform_orders WHERE amount > 0",
-            "expected": {"rowcount": 3}
-        }
-    },
-    {
-        "id": "03_aggregate_sales",
-        "title": "Aggregate Sales",
-        "description": "Aggregate orders by status and sum total_amount.",
-        "model_file": "models/aggregate_sales.sql",
-        "validation": {
-            "sql": "SELECT SUM(total_amount) AS total_sales FROM aggregate_sales",
-            "expected": {"total_sales": 450}
-        }
-    },
-    {
-        "id": "04_join_customers",
-        "title": "Join Customers",
-        "description": "Join orders with customer info.",
-        "model_file": "models/join_customers.sql",
-        "validation": {
-            "sql": "SELECT COUNT(*) AS rowcount FROM join_customers WHERE customer_region='US'",
-            "expected": {"rowcount": 3}
-        }
-    },
-    {
-        "id": "05_data_quality_checks",
-        "title": "Data Quality Checks",
-        "description": "Check for nulls and invalid data.",
-        "model_file": "models/data_quality.sql",
-        "validation": {
-            "sql": "SELECT COUNT(*) AS invalid_rows FROM data_quality WHERE total_amount IS NULL",
-            "expected": {"invalid_rows": 0}
-        }
-    }
+    {"id":"01_hello_dbt","title":"Hello dbt!","description":"Learn your first dbt model using MotherDuck.","model_file":"models/my_first_model.sql","validation":{"sql":"SELECT COUNT(*) AS rowcount FROM my_first_model","expected":{"rowcount":3}}},
+    {"id":"02_transform_orders","title":"Transform Orders","description":"Filter, rename columns, create a derived table.","model_file":"models/transform_orders.sql","validation":{"sql":"SELECT COUNT(*) AS rowcount FROM transform_orders WHERE amount > 0","expected":{"rowcount":3}}},
+    {"id":"03_aggregate_sales","title":"Aggregate Sales","description":"Aggregate orders by status and sum total_amount.","model_file":"models/aggregate_sales.sql","validation":{"sql":"SELECT SUM(total_amount) AS total_sales FROM aggregate_sales","expected":{"total_sales":450}}},
+    {"id":"04_join_customers","title":"Join Customers","description":"Join orders with customer info.","model_file":"models/join_customers.sql","validation":{"sql":"SELECT COUNT(*) AS rowcount FROM join_customers WHERE customer_region='US'","expected":{"rowcount":3}}},
+    {"id":"05_data_quality_checks","title":"Data Quality Checks","description":"Check for nulls and invalid data.","model_file":"models/data_quality.sql","validation":{"sql":"SELECT COUNT(*) AS invalid_rows FROM data_quality WHERE total_amount IS NULL","expected":{"invalid_rows":0}}}
 ]
 
 # ============================
@@ -153,7 +105,7 @@ if st.button("🚀 Start Lesson"):
         st.session_state["dbt_dir"] = tempfile.mkdtemp(prefix="dbt_")
         shutil.copytree("dbt_project", st.session_state["dbt_dir"], dirs_exist_ok=True)
 
-        # Dynamic profiles.yml with learner schema
+        # Dynamic profiles.yml
         profiles_yml = f"""
 decode_dbt:
   target: dev
@@ -175,7 +127,7 @@ decode_dbt:
 
 # Step 2: SQL editor
 if "dbt_dir" in st.session_state:
-    model_path = os.path.join(st.session_state["dbt_dir"], lesson.get("model_file", ""))
+    model_path = os.path.join(st.session_state["dbt_dir"], lesson.get("model_file",""))
     if not os.path.exists(model_path):
         st.warning(f"⚠️ Model file not found: {model_path}")
         st.stop()
