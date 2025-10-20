@@ -1,0 +1,9 @@
+decode_dbt_profile:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "md:decode_dbt"   # uses MotherDuck cloud
+      schema: main
+      threads: 4
+      token: "{{ env_var('MOTHERDUCK_TOKEN') }}"

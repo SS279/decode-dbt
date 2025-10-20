@@ -1,0 +1,16 @@
+# === Core Backend ===
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.8.2
+python-dotenv==1.0.1
+
+streamlit
+requests
+
+# === dbt & DuckDB / MotherDuck Integration ===
+dbt-core==1.8.6
+dbt-duckdb==1.8.2
+motherduck
+
+# === Optional: Dev Utils ===
+rich==13.7.1        # pretty logging
