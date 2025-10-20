@@ -62,10 +62,14 @@ def validate_output(md_db, validation):
         return False, {"error": str(e)}
 
 def load_model_sql(model_path):
-    with open(model_path, "r") as f:
-        return f.read()
+    """Load SQL content from file"""
+    if os.path.exists(model_path):
+        with open(model_path, "r") as f:
+            return f.read()
+    return ""
 
 def save_model_sql(model_path, sql):
+    """Save SQL content to file"""
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
     with open(model_path, "w") as f:
         f.write(sql)
@@ -83,7 +87,7 @@ if st.button("🚀 Start Lesson"):
         st.session_state["dbt_dir"] = tempfile.mkdtemp(prefix="dbt_")
         os.system(f"cp -r dbt_project/* {st.session_state['dbt_dir']}")
 
-        # Write profiles.yml with fixed MotherDuck share and schema
+        # Write profiles.yml with fixed MotherDuck share
         profiles_yml = f"""
 decode_dbt:
   target: dev
@@ -105,7 +109,11 @@ decode_dbt:
 
 # Step 2: Mini SQL editor for model
 if "dbt_dir" in st.session_state:
-    model_path = os.path.join(st.session_state["dbt_dir"], lesson["model_file"])
+    model_path = os.path.join(st.session_state["dbt_dir"], lesson.get("model_file", ""))
+    if not os.path.exists(model_path):
+        st.warning(f"⚠️ Model file not found: {model_path}")
+        st.stop()
+
     sql_code = load_model_sql(model_path)
     edited_sql = st.text_area("✏️ Edit Model SQL", value=sql_code, height=200)
 
@@ -114,7 +122,7 @@ if "dbt_dir" in st.session_state:
 
         seed_path = os.path.join(st.session_state["dbt_dir"], "seeds", "raw_orders.csv")
         if not os.path.exists(seed_path):
-            st.error("❌ Seed file not found!")
+            st.error("❌ Seed file not found! Make sure seeds/raw_orders.csv exists.")
         else:
             with st.spinner("Running dbt seed..."):
                 logs_seed = run_dbt_command("seed", st.session_state["dbt_dir"])
