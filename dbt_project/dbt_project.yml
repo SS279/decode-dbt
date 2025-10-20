@@ -2,7 +2,7 @@ name: "decode_dbt"
 version: "1.0"
 config-version: 2
 
-profile: "decode_dbt_profile"
+profile: "decode_dbt"
 
 model-paths: ["models"]
 seed-paths: ["models/seeds"]
