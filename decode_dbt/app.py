@@ -26,20 +26,24 @@ MOTHERDUCK_SHARE = "decode_data"
 # LEARNER ID AND SCHEMA
 # ============================
 
+# Callback to set learner ID and schema
 def set_learner_id():
-    st.session_state["learner_id"] = st.session_state["input_learner_id"]
-    st.session_state["learner_schema"] = f"learner_{uuid.uuid4().hex[:8]}"
+    learner_id = st.session_state["input_learner_id"].strip()
+    if learner_id:
+        st.session_state["learner_id"] = learner_id
+        # Deterministic schema from learner_id
+        st.session_state["learner_schema"] = f"learner_{uuid.uuid4().hex[:8]}"
 
-# Ask for learner ID only if not set
-if "learner_id" not in st.session_state:
+# Ask for learner ID only if not already set
+if "learner_id" not in st.session_state or "learner_schema" not in st.session_state:
     st.text_input(
         "👤 Enter your unique learner ID (email or username):",
         key="input_learner_id",
         on_change=set_learner_id
     )
-    st.stop()  # Wait until learner enters ID
+    st.stop()  # Stop until learner enters ID
 
-# From here on, learner_id and learner_schema are available
+# Now these keys are guaranteed to exist
 st.write(f"✅ Learner ID: {st.session_state['learner_id']}")
 st.write(f"✅ Sandbox schema: {st.session_state['learner_schema']}")
 
