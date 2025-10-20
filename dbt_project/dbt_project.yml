@@ -5,7 +5,7 @@ config-version: 2
 profile: "decode_dbt"
 
 model-paths: ["models"]
-seed-paths: ["models/seeds"]
+seed-paths: ["seeds"]
 target-path: "target"
 clean-targets: ["target", "dbt_packages"]
 
