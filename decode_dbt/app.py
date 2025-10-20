@@ -4,6 +4,7 @@ import tempfile
 import os
 import duckdb
 import shutil
+import uuid
 
 # ============================
 # APP SETUP
@@ -18,10 +19,19 @@ if not MOTHERDUCK_TOKEN:
     st.error("❌ Missing MotherDuck token. Set it in Streamlit secrets.")
     st.stop()
 
-# Pre-created MotherDuck share
+# MotherDuck share
 MOTHERDUCK_SHARE = "decode_dbt"
 
-# Lessons
+# Assign a unique schema per learner session
+if "learner_schema" not in st.session_state:
+    st.session_state["learner_schema"] = f"learner_{uuid.uuid4().hex[:8]}"
+
+LEARNER_SCHEMA = st.session_state["learner_schema"]
+
+# ============================
+# LESSONS
+# ============================
+
 LESSONS = [
     {
         "id": "01_hello_dbt",
@@ -30,13 +40,13 @@ LESSONS = [
         "model_file": "models/my_first_model.sql",
         "validation": {
             "sql": "SELECT COUNT(*) AS rowcount FROM my_first_model",
-            "expected": {"rowcount": 3}  # match seed
+            "expected": {"rowcount": 3}
         }
     },
     {
         "id": "02_transform_orders",
         "title": "Transform Orders",
-        "description": "Practice basic transformations: filter, rename columns, and create a derived table.",
+        "description": "Filter, rename columns, create a derived table.",
         "model_file": "models/transform_orders.sql",
         "validation": {
             "sql": "SELECT COUNT(*) AS rowcount FROM transform_orders WHERE amount > 0",
@@ -46,7 +56,7 @@ LESSONS = [
     {
         "id": "03_aggregate_sales",
         "title": "Aggregate Sales",
-        "description": "Learn aggregation in dbt: group by order_status and sum total_amount.",
+        "description": "Aggregate orders by status and sum total_amount.",
         "model_file": "models/aggregate_sales.sql",
         "validation": {
             "sql": "SELECT SUM(total_amount) AS total_sales FROM aggregate_sales",
@@ -56,7 +66,7 @@ LESSONS = [
     {
         "id": "04_join_customers",
         "title": "Join Customers",
-        "description": "Practice joins: combine customer and order data to create enriched datasets.",
+        "description": "Join orders with customer info.",
         "model_file": "models/join_customers.sql",
         "validation": {
             "sql": "SELECT COUNT(*) AS rowcount FROM join_customers WHERE customer_region='US'",
@@ -66,7 +76,7 @@ LESSONS = [
     {
         "id": "05_data_quality_checks",
         "title": "Data Quality Checks",
-        "description": "Learn how to implement simple data quality checks using dbt tests.",
+        "description": "Check for nulls and invalid data.",
         "model_file": "models/data_quality.sql",
         "validation": {
             "sql": "SELECT COUNT(*) AS invalid_rows FROM data_quality WHERE total_amount IS NULL",
@@ -122,10 +132,9 @@ st.markdown(f"**Description:** {lesson['description']}")
 if st.button("🚀 Start Lesson"):
     if "dbt_dir" not in st.session_state:
         st.session_state["dbt_dir"] = tempfile.mkdtemp(prefix="dbt_")
-        # Copy entire dbt project with all models and seeds
         shutil.copytree("dbt_project", st.session_state["dbt_dir"], dirs_exist_ok=True)
 
-        # Write profiles.yml for MotherDuck
+        # Dynamic profiles.yml with learner schema
         profiles_yml = f"""
 decode_dbt:
   target: dev
@@ -133,14 +142,14 @@ decode_dbt:
     dev:
       type: duckdb
       path: "md:{MOTHERDUCK_SHARE}"
-      schema: main
+      schema: {LEARNER_SCHEMA}
       threads: 4
       motherduck_token: {MOTHERDUCK_TOKEN}
 """
         with open(f"{st.session_state['dbt_dir']}/profiles.yml", "w") as f:
             f.write(profiles_yml)
 
-        st.success(f"✅ Sandbox initialized at {st.session_state['dbt_dir']}")
+        st.success(f"✅ Sandbox initialized with schema `{LEARNER_SCHEMA}`")
         st.session_state["dbt_ran"] = False
     else:
         st.info("Sandbox already initialized.")
@@ -159,9 +168,9 @@ if "dbt_dir" in st.session_state:
         save_model_sql(model_path, edited_sql)
 
         # Run seeds
-        seed_files = [f for f in os.listdir(os.path.join(st.session_state["dbt_dir"], "seeds")) if f.endswith(".csv")]
-        if not seed_files:
-            st.error("❌ No seed files found!")
+        seed_dir = os.path.join(st.session_state["dbt_dir"], "seeds")
+        if not os.path.exists(seed_dir):
+            st.error("❌ Seed folder not found!")
         else:
             with st.spinner("Running dbt seed..."):
                 logs_seed = run_dbt_command("seed", st.session_state["dbt_dir"])
