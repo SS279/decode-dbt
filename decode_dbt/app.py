@@ -3,7 +3,6 @@ import subprocess
 import tempfile
 import os
 import duckdb
-import sys
 
 # ============================
 # APP SETUP
@@ -18,8 +17,7 @@ if not MOTHERDUCK_TOKEN:
     st.error("❌ Missing MotherDuck token. Set it in Streamlit secrets.")
     st.stop()
 
-# Pre-created MotherDuck share for remote MVP
-# Change this to your MotherDuck share name
+# Pre-created MotherDuck share
 MOTHERDUCK_SHARE = "decode_dbt"
 
 # Lessons
@@ -28,6 +26,7 @@ LESSONS = [
         "id": "01_hello_dbt",
         "title": "Hello dbt!",
         "description": "Learn your first dbt model using MotherDuck.",
+        "model_file": "models/my_first_model.sql",
         "validation": {
             "sql": "SELECT COUNT(*) AS rowcount FROM my_first_model",
             "expected": {"rowcount": 4}
@@ -62,6 +61,15 @@ def validate_output(md_db, validation):
     except Exception as e:
         return False, {"error": str(e)}
 
+def load_model_sql(model_path):
+    with open(model_path, "r") as f:
+        return f.read()
+
+def save_model_sql(model_path, sql):
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    with open(model_path, "w") as f:
+        f.write(sql)
+
 # ============================
 # UI
 # ============================
@@ -73,11 +81,9 @@ st.markdown(f"**Description:** {lesson['description']}")
 if st.button("🚀 Start Lesson"):
     if "dbt_dir" not in st.session_state:
         st.session_state["dbt_dir"] = tempfile.mkdtemp(prefix="dbt_")
-
-        # Copy dbt project to temp sandbox
         os.system(f"cp -r dbt_project/* {st.session_state['dbt_dir']}")
 
-        # Write profiles.yml with fixed MotherDuck share and main schema
+        # Write profiles.yml with fixed MotherDuck share and schema
         profiles_yml = f"""
 decode_dbt:
   target: dev
@@ -97,31 +103,31 @@ decode_dbt:
     else:
         st.info("Sandbox already initialized.")
 
-# Step 2: Run dbt seed + models
+# Step 2: Mini SQL editor for model
 if "dbt_dir" in st.session_state:
-    dbt_dir = st.session_state["dbt_dir"]
+    model_path = os.path.join(st.session_state["dbt_dir"], lesson["model_file"])
+    sql_code = load_model_sql(model_path)
+    edited_sql = st.text_area("✏️ Edit Model SQL", value=sql_code, height=200)
 
-    if st.button("🏗️ Run dbt models"):
-        if not st.session_state.get("dbt_ran", False):
-            seed_path = os.path.join(dbt_dir, "seeds", "raw_orders.csv")
-            if not os.path.exists(seed_path):
-                st.error("❌ Seed file not found! Ensure seeds/raw_orders.csv exists.")
-            else:
-                with st.spinner("Running dbt seed..."):
-                    logs_seed = run_dbt_command("seed", dbt_dir)
-                    st.code(logs_seed, language="bash")
+    if st.button("💾 Save & Run Model"):
+        save_model_sql(model_path, edited_sql)
 
-                with st.spinner("Running dbt models..."):
-                    logs_run = run_dbt_command("run", dbt_dir)
-                    st.code(logs_run, language="bash")
-
-                st.session_state["dbt_ran"] = True
+        seed_path = os.path.join(st.session_state["dbt_dir"], "seeds", "raw_orders.csv")
+        if not os.path.exists(seed_path):
+            st.error("❌ Seed file not found!")
         else:
-            st.info("✅ dbt already ran in this session.")
+            with st.spinner("Running dbt seed..."):
+                logs_seed = run_dbt_command("seed", st.session_state["dbt_dir"])
+                st.code(logs_seed, language="bash")
+
+            with st.spinner("Running dbt models..."):
+                logs_run = run_dbt_command("run", st.session_state["dbt_dir"])
+                st.code(logs_run, language="bash")
+
+            st.session_state["dbt_ran"] = True
 
 # Step 3: Validate Lesson
 if "dbt_dir" in st.session_state:
-    dbt_dir = st.session_state["dbt_dir"]
     if st.button("✅ Validate Lesson"):
         ok, result = validate_output(MOTHERDUCK_SHARE, lesson["validation"])
         if ok:
