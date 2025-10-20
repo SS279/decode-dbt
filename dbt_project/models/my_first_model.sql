@@ -1,4 +1,5 @@
--- models/my_first_model.sql
+{{ config(schema="main") }}
+
 SELECT
     id,
     customer_name,

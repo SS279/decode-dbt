@@ -11,4 +11,8 @@ clean-targets: ["target", "dbt_packages"]
 
 models:
   decode_dbt:
+    +schema: main
     +materialized: table
+seeds:
+  decode_dbt:
+    +schema: main
