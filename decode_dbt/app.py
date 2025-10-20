@@ -3,6 +3,7 @@ import subprocess
 import tempfile
 import os
 import duckdb
+import shutil
 
 # ============================
 # APP SETUP
@@ -18,7 +19,7 @@ if not MOTHERDUCK_TOKEN:
     st.stop()
 
 # Pre-created MotherDuck share
-MOTHERDUCK_SHARE = "decode_dbt"
+MOTHERDUCK_SHARE = "dbtlearn_demo"
 
 # Lessons
 LESSONS = [
@@ -29,7 +30,47 @@ LESSONS = [
         "model_file": "models/my_first_model.sql",
         "validation": {
             "sql": "SELECT COUNT(*) AS rowcount FROM my_first_model",
-            "expected": {"rowcount": 4}
+            "expected": {"rowcount": 3}  # match seed
+        }
+    },
+    {
+        "id": "02_transform_orders",
+        "title": "Transform Orders",
+        "description": "Practice basic transformations: filter, rename columns, and create a derived table.",
+        "model_file": "models/transform_orders.sql",
+        "validation": {
+            "sql": "SELECT COUNT(*) AS rowcount FROM transform_orders WHERE amount > 0",
+            "expected": {"rowcount": 3}
+        }
+    },
+    {
+        "id": "03_aggregate_sales",
+        "title": "Aggregate Sales",
+        "description": "Learn aggregation in dbt: group by order_status and sum total_amount.",
+        "model_file": "models/aggregate_sales.sql",
+        "validation": {
+            "sql": "SELECT SUM(total_amount) AS total_sales FROM aggregate_sales",
+            "expected": {"total_sales": 450}
+        }
+    },
+    {
+        "id": "04_join_customers",
+        "title": "Join Customers",
+        "description": "Practice joins: combine customer and order data to create enriched datasets.",
+        "model_file": "models/join_customers.sql",
+        "validation": {
+            "sql": "SELECT COUNT(*) AS rowcount FROM join_customers WHERE customer_region='US'",
+            "expected": {"rowcount": 3}
+        }
+    },
+    {
+        "id": "05_data_quality_checks",
+        "title": "Data Quality Checks",
+        "description": "Learn how to implement simple data quality checks using dbt tests.",
+        "model_file": "models/data_quality.sql",
+        "validation": {
+            "sql": "SELECT COUNT(*) AS invalid_rows FROM data_quality WHERE total_amount IS NULL",
+            "expected": {"invalid_rows": 0}
         }
     }
 ]
@@ -39,7 +80,6 @@ LESSONS = [
 # ============================
 
 def run_dbt_command(command, workdir):
-    """Run a dbt command in sandbox directory"""
     env = os.environ.copy()
     env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
     result = subprocess.run(
@@ -52,7 +92,6 @@ def run_dbt_command(command, workdir):
     return result.stdout + "\n" + result.stderr
 
 def validate_output(md_db, validation):
-    """Validate SQL result against expected output"""
     try:
         con = duckdb.connect(f"md:{md_db}?motherduck_token={MOTHERDUCK_TOKEN}")
         res = con.execute(validation["sql"]).fetchdf().to_dict(orient="records")[0]
@@ -62,14 +101,12 @@ def validate_output(md_db, validation):
         return False, {"error": str(e)}
 
 def load_model_sql(model_path):
-    """Load SQL content from file"""
     if os.path.exists(model_path):
         with open(model_path, "r") as f:
             return f.read()
     return ""
 
 def save_model_sql(model_path, sql):
-    """Save SQL content to file"""
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
     with open(model_path, "w") as f:
         f.write(sql)
@@ -85,9 +122,10 @@ st.markdown(f"**Description:** {lesson['description']}")
 if st.button("🚀 Start Lesson"):
     if "dbt_dir" not in st.session_state:
         st.session_state["dbt_dir"] = tempfile.mkdtemp(prefix="dbt_")
-        os.system(f"cp -r dbt_project/* {st.session_state['dbt_dir']}")
+        # Copy entire dbt project with all models and seeds
+        shutil.copytree("dbt_project", st.session_state["dbt_dir"], dirs_exist_ok=True)
 
-        # Write profiles.yml with fixed MotherDuck share
+        # Write profiles.yml for MotherDuck
         profiles_yml = f"""
 decode_dbt:
   target: dev
@@ -107,7 +145,7 @@ decode_dbt:
     else:
         st.info("Sandbox already initialized.")
 
-# Step 2: Mini SQL editor for model
+# Step 2: SQL editor
 if "dbt_dir" in st.session_state:
     model_path = os.path.join(st.session_state["dbt_dir"], lesson.get("model_file", ""))
     if not os.path.exists(model_path):
@@ -120,9 +158,10 @@ if "dbt_dir" in st.session_state:
     if st.button("💾 Save & Run Model"):
         save_model_sql(model_path, edited_sql)
 
-        seed_path = os.path.join(st.session_state["dbt_dir"], "seeds", "raw_orders.csv")
-        if not os.path.exists(seed_path):
-            st.error("❌ Seed file not found! Make sure seeds/raw_orders.csv exists.")
+        # Run seeds
+        seed_files = [f for f in os.listdir(os.path.join(st.session_state["dbt_dir"], "seeds")) if f.endswith(".csv")]
+        if not seed_files:
+            st.error("❌ No seed files found!")
         else:
             with st.spinner("Running dbt seed..."):
                 logs_seed = run_dbt_command("seed", st.session_state["dbt_dir"])

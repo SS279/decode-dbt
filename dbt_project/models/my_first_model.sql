@@ -1,9 +1,4 @@
-{{ config(schema="main") }}
-
-SELECT
-    id,
-    customer_name,
-    amount,
-    order_date
-FROM {{ ref('raw_orders') }}
-WHERE amount > 0
+-- Select all completed orders
+select *
+from {{ ref('raw_orders') }}
+where order_status = 'completed'
