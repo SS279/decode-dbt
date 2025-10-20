@@ -19,7 +19,7 @@ if not MOTHERDUCK_TOKEN:
     st.stop()
 
 # Pre-created MotherDuck share
-MOTHERDUCK_SHARE = "decode_data"
+MOTHERDUCK_SHARE = "decode_dbt"
 
 # Lessons
 LESSONS = [
