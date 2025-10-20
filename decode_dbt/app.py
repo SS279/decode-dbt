@@ -97,18 +97,17 @@ if "sandbox_id" in st.session_state:
     dbt_dir = st.session_state["dbt_dir"]
     sandbox_id = st.session_state["sandbox_id"]
 
+    # Button to run dbt (seed + models) only once
     if st.button("🏗️ Run dbt models"):
-        with st.spinner("Running dbt seed..."):
-            logs_seed = run_dbt_command("seed", dbt_dir)
-            st.code(logs_seed, language="bash")
+        if not st.session_state.get("dbt_ran", False):
+            with st.spinner("Running dbt seed..."):
+                logs_seed = run_dbt_command("seed", dbt_dir)
+                st.code(logs_seed, language="bash")
 
-        with st.spinner("Running dbt models..."):
-            logs_run = run_dbt_command("run", dbt_dir)
-            st.code(logs_run, language="bash")
+            with st.spinner("Running dbt models..."):
+                logs_run = run_dbt_command("run", dbt_dir)
+                st.code(logs_run, language="bash")
 
-    if st.button("✅ Validate Lesson"):
-        ok, result = validate_output(sandbox_id, lesson["validation"])
-        if ok:
-            st.success(f"🎉 Lesson passed! Result: {result}")
+            st.session_state["dbt_ran"] = True
         else:
-            st.error(f"❌ Validation failed. Got {result}")
+            st.info("✅ dbt already ran in this session.")
