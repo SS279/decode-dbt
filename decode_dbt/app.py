@@ -4,7 +4,7 @@ import tempfile
 import os
 import duckdb
 import shutil
-import hashlib
+import uuid
 
 # ============================
 # APP SETUP
@@ -20,28 +20,28 @@ if not MOTHERDUCK_TOKEN:
     st.stop()
 
 # MotherDuck share
-MOTHERDUCK_SHARE = "dbtlearn_demo"
+MOTHERDUCK_SHARE = "decode_data"
 
 # ============================
 # LEARNER ID AND SCHEMA
 # ============================
 
-def get_learner_schema(learner_id):
-    """Deterministically generate a unique schema name from learner_id"""
-    hash_str = hashlib.sha256(learner_id.encode()).hexdigest()[:8]
-    return f"learner_{hash_str}"
+def set_learner_id():
+    st.session_state["learner_id"] = st.session_state["input_learner_id"]
+    st.session_state["learner_schema"] = f"learner_{uuid.uuid4().hex[:8]}"
 
+# Ask for learner ID only if not set
 if "learner_id" not in st.session_state:
-    st.session_state["learner_id"] = st.text_input(
-        "👤 Enter your unique learner ID (email or username)", ""
+    st.text_input(
+        "👤 Enter your unique learner ID (email or username):",
+        key="input_learner_id",
+        on_change=set_learner_id
     )
+    st.stop()  # Wait until learner enters ID
 
-if st.session_state.get("learner_id"):
-    LEARNER_SCHEMA = get_learner_schema(st.session_state["learner_id"])
-    st.session_state["learner_schema"] = LEARNER_SCHEMA
-    st.info(f"✅ Your sandbox schema: `{LEARNER_SCHEMA}`")
-else:
-    st.stop()  # Require learner ID to proceed
+# From here on, learner_id and learner_schema are available
+st.write(f"✅ Learner ID: {st.session_state['learner_id']}")
+st.write(f"✅ Sandbox schema: {st.session_state['learner_schema']}")
 
 # ============================
 # LESSONS
