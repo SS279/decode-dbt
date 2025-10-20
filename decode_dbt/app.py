@@ -4,7 +4,7 @@ import tempfile
 import os
 import duckdb
 import shutil
-import uuid
+import hashlib
 
 # ============================
 # APP SETUP
@@ -20,13 +20,28 @@ if not MOTHERDUCK_TOKEN:
     st.stop()
 
 # MotherDuck share
-MOTHERDUCK_SHARE = "decode_dbt"
+MOTHERDUCK_SHARE = "dbtlearn_demo"
 
-# Assign a unique schema per learner session
-if "learner_schema" not in st.session_state:
-    st.session_state["learner_schema"] = f"learner_{uuid.uuid4().hex[:8]}"
+# ============================
+# LEARNER ID AND SCHEMA
+# ============================
 
-LEARNER_SCHEMA = st.session_state["learner_schema"]
+def get_learner_schema(learner_id):
+    """Deterministically generate a unique schema name from learner_id"""
+    hash_str = hashlib.sha256(learner_id.encode()).hexdigest()[:8]
+    return f"learner_{hash_str}"
+
+if "learner_id" not in st.session_state:
+    st.session_state["learner_id"] = st.text_input(
+        "👤 Enter your unique learner ID (email or username)", ""
+    )
+
+if st.session_state.get("learner_id"):
+    LEARNER_SCHEMA = get_learner_schema(st.session_state["learner_id"])
+    st.session_state["learner_schema"] = LEARNER_SCHEMA
+    st.info(f"✅ Your sandbox schema: `{LEARNER_SCHEMA}`")
+else:
+    st.stop()  # Require learner ID to proceed
 
 # ============================
 # LESSONS
