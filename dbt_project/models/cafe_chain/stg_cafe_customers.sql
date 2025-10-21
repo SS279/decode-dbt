@@ -4,7 +4,7 @@ with source as (
 cleaned as (
     select
         customer_id,
-        initcap(customer_name) as customer_name,
+        customer_name,
         region,
         cast(join_date as date) as join_date,
         loyalty_points
