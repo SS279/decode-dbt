@@ -172,23 +172,56 @@ if "dbt_dir" in st.session_state:
 
 if st.session_state.get("dbt_ran", False):
     st.header("🧪 SQL Sandbox — Query Your Data")
-    query = st.text_area("Write your SQL query below:", "SELECT * FROM information_schema.tables LIMIT 5")
+
+    if "sql_query" not in st.session_state:
+        st.session_state["sql_query"] = "SELECT * FROM information_schema.tables LIMIT 5;"
+
+    query = st.text_area(
+        "Write your SQL query below:",
+        value=st.session_state["sql_query"],
+        height=200,
+        key="sql_editor"
+    )
+
     if st.button("▶️ Run Query"):
+        st.session_state["sql_query"] = query
         try:
             con = connect_motherduck()
-            df = con.execute(query).fetchdf()
+            df = con.execute(st.session_state["sql_query"]).df()
             con.close()
-            st.dataframe(df)
-
-            # Simple BI dashboard if numerical data
-            st.subheader("📊 Mini BI Dashboard")
-            numeric_cols = df.select_dtypes(include=['number']).columns
-            if len(numeric_cols) >= 2:
-                x = st.selectbox("X-Axis", numeric_cols, key="xaxis")
-                y = st.selectbox("Y-Axis", numeric_cols, key="yaxis")
-                st.altair_chart(alt.Chart(df).mark_bar().encode(x=x, y=y), use_container_width=True)
+            st.session_state["query_result"] = df
+            st.success("✅ Query ran successfully!")
         except Exception as e:
             st.error(f"Error running query: {e}")
+
+    if "query_result" in st.session_state:
+        df = st.session_state["query_result"]
+        st.subheader("Query Result")
+        st.dataframe(df, use_container_width=True)
+
+        st.divider()
+        st.subheader("📊 Mini BI Dashboard")
+
+        if not df.empty:
+            numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
+            category_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+
+            if numeric_cols and category_cols:
+                with st.expander("Customize Dashboard", expanded=True):
+                    x_axis = st.selectbox("X-Axis (Category)", category_cols, key="bi_xaxis")
+                    y_axis = st.selectbox("Y-Axis (Value)", numeric_cols, key="bi_yaxis")
+                    chart_type = st.radio("Chart Type", ["Bar", "Line", "Area"], horizontal=True, key="bi_chart")
+
+                if chart_type == "Bar":
+                    chart = alt.Chart(df).mark_bar().encode(x=x_axis, y=y_axis)
+                elif chart_type == "Line":
+                    chart = alt.Chart(df).mark_line().encode(x=x_axis, y=y_axis)
+                else:
+                    chart = alt.Chart(df).mark_area().encode(x=x_axis, y=y_axis)
+
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.info("Add some categorical and numeric columns in your query to explore charts.")
 
 # ============================
 # VALIDATION
