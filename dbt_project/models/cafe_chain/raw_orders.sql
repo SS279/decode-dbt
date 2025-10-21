@@ -1,0 +1,1 @@
+select * from {{ ref('cafe_orders') }}

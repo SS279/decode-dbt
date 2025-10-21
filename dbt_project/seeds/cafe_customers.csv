@@ -1,0 +1,6 @@
+customer_id,customer_name,region,join_date,loyalty_points
+101,Alice,UK,2023-06-01,120
+102,Bob,UK,2023-07-15,60
+103,Charlie,UK,2023-08-10,0
+104,David,UK,2023-09-12,45
+105,Ella,UK,2023-09-20,30
