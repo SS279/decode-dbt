@@ -14,6 +14,7 @@ import altair as alt
 st.set_page_config(page_title="Decode dbt", page_icon="🦆", layout="wide")
 st.title("🦆 Decode dbt — Learn dbt with MotherDuck")
 
+# MotherDuck token
 MOTHERDUCK_TOKEN = st.secrets.get("MOTHERDUCK_TOKEN", None)
 if not MOTHERDUCK_TOKEN:
     st.error("❌ Missing MotherDuck token. Add it to Streamlit secrets.")
@@ -37,8 +38,10 @@ def set_learner_id():
         st.session_state.pop("tables_list", None)
 
 if "learner_id" not in st.session_state:
-    st.text_input("👤 Enter your unique learner ID (email or username):",
-                  key="input_learner_id", on_change=set_learner_id)
+    st.text_input(
+        "👤 Enter your unique learner ID (email or username):",
+        key="input_learner_id", on_change=set_learner_id
+    )
     st.stop()
 
 LEARNER_SCHEMA = st.session_state["learner_schema"]
@@ -54,7 +57,7 @@ LESSONS = [
         "description": "Analyze coffee shop sales and customer loyalty.",
         "model_dir": "models/cafe_chain",
         "validation": {
-            "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema = current_schema()",
+            "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
             "expected_min": 2
         }
     },
@@ -64,7 +67,7 @@ LESSONS = [
         "description": "Model IoT readings and calculate energy KPIs.",
         "model_dir": "models/energy_smart",
         "validation": {
-            "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema = current_schema()",
+            "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
             "expected_min": 2
         }
     }
@@ -76,13 +79,28 @@ LESSONS = [
 def run_dbt_command(command, workdir):
     env = os.environ.copy()
     env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
-    result = subprocess.run(["dbt"] + command.split(), cwd=workdir,
-                            capture_output=True, text=True, env=env)
+    result = subprocess.run(
+        ["dbt"] + command.split(),
+        cwd=workdir,
+        capture_output=True,
+        text=True,
+        env=env
+    )
     return result.stdout + "\n" + result.stderr
 
 @st.cache_resource(show_spinner=False)
 def get_duckdb_connection():
     return duckdb.connect(f"md:{MOTHERDUCK_SHARE}?motherduck_token={MOTHERDUCK_TOKEN}")
+
+def list_tables(schema):
+    try:
+        con = get_duckdb_connection()
+        con.execute(f"SET SCHEMA {schema}")
+        df = con.execute("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema()").fetchdf()
+        return df["table_name"].tolist() if not df.empty else []
+    except Exception as e:
+        st.error(f"Error listing tables: {e}")
+        return []
 
 def validate_output(md_db, validation):
     try:
@@ -91,12 +109,6 @@ def validate_output(md_db, validation):
         return res.get("models_built", 0) >= validation["expected_min"], res
     except Exception as e:
         return False, {"error": str(e)}
-
-def list_tables(schema):
-    con = get_duckdb_connection()
-    df = con.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema='{schema}'").fetchdf()
-    con.close()
-    return df["table_name"].tolist() if not df.empty else []
 
 def load_model_sql(model_path):
     return open(model_path).read() if os.path.exists(model_path) else ""
@@ -157,23 +169,39 @@ if "dbt_dir" in st.session_state:
         save_model_sql(model_path, edited_sql)
         st.success("✅ Model saved!")
 
-    # --- Selective dbt run ---
-    st.subheader("🏃 Run dbt Models")
+# ====================================
+# RUN SEEDS AND MODELS
+# ====================================
+if "dbt_dir" in st.session_state:
+    st.subheader("🏃 Run dbt Models & Seeds")
     run_option = st.radio("Choose Run Option:", ["Run All Models", "Run Selected Model"], index=0)
-    if st.button("▶️ Run dbt", key="run_dbt_btn"):
-        with st.spinner("Running dbt seed..."):
-            seed_logs = run_dbt_command("seed", st.session_state["dbt_dir"])
-            st.code(seed_logs, language="bash")
+    if st.button("▶️ Run dbt + Seed", key="run_dbt_btn"):
+        # Run lesson-specific seeds
+        seed_dir = os.path.join(st.session_state["dbt_dir"], lesson["model_dir"], "seeds")
+        if os.path.exists(seed_dir):
+            seed_files = [f for f in os.listdir(seed_dir) if f.endswith(".csv")]
+            if seed_files:
+                with st.spinner("Running lesson seeds..."):
+                    for seed_file in seed_files:
+                        seed_name = seed_file.replace(".csv", "")
+                        st.code(run_dbt_command(f"seed --select {lesson['id']}.{seed_name}", st.session_state["dbt_dir"]), language="bash")
+            else:
+                st.info("No seeds found for this lesson.")
+        else:
+            st.info("No seed folder for this lesson.")
+
+        # Run models
         if run_option == "Run All Models":
-            with st.spinner("Running all dbt models..."):
-                run_logs = run_dbt_command("run", st.session_state["dbt_dir"])
+            with st.spinner("Running all models..."):
+                run_logs = run_dbt_command(f"run --select {lesson['id']}", st.session_state["dbt_dir"])
                 st.code(run_logs, language="bash")
         else:
-            with st.spinner(f"Running dbt model: {model_choice}"):
-                run_logs = run_dbt_command(f"run --select {lesson['id']}.{model_choice.split('.')[0]}", st.session_state["dbt_dir"])
+            model_name = model_choice.split(".")[0]
+            with st.spinner(f"Running selected model: {model_name}"):
+                run_logs = run_dbt_command(f"run --select {lesson['id']}.{model_name}", st.session_state["dbt_dir"])
                 st.code(run_logs, language="bash")
+
         st.session_state["dbt_ran"] = True
-        # Update tables list after run
         st.session_state["tables_list"] = list_tables(LEARNER_SCHEMA)
         st.success("✅ dbt run complete!")
 
@@ -181,25 +209,16 @@ if "dbt_dir" in st.session_state:
 # TABLE EXPLORER
 # ====================================
 if st.session_state.get("dbt_ran", False):
-    st.header("📂 Table Explorer")
+    st.header("📋 Tables in Your Schema")
     if "tables_list" not in st.session_state:
         st.session_state["tables_list"] = list_tables(LEARNER_SCHEMA)
-    tables = st.session_state["tables_list"]
-    if tables:
-        table_choice = st.selectbox("Select Table to View", tables)
-        con = get_duckdb_connection()
-        df_table = con.execute(f"SELECT * FROM {LEARNER_SCHEMA}.{table_choice} LIMIT 50").fetchdf()
-        st.dataframe(df_table)
-    else:
-        st.info("No tables found in your schema yet.")
+    st.dataframe(pd.DataFrame(st.session_state["tables_list"], columns=["table_name"]))
 
 # ====================================
-# SQL SANDBOX + BI DASHBOARD
+# SQL SANDBOX + MINI BI DASHBOARD
 # ====================================
-
 if st.session_state.get("dbt_ran", False):
     st.header("🧪 SQL Sandbox — Query Your Data")
-
     if "sql_query" not in st.session_state:
         st.session_state["sql_query"] = "SELECT * FROM information_schema.tables LIMIT 5;"
 
@@ -214,7 +233,7 @@ if st.session_state.get("dbt_ran", False):
         st.session_state["sql_query"] = query
         try:
             con = get_duckdb_connection()
-            df = con.execute(query).fetchdf()
+            df = con.execute(f"SET SCHEMA {LEARNER_SCHEMA}; {query}").fetchdf()
             st.session_state["query_result"] = df
             st.success("✅ Query ran successfully!")
         except Exception as e:
@@ -247,7 +266,6 @@ if st.session_state.get("dbt_ran", False):
 # ====================================
 # VALIDATION
 # ====================================
-
 if st.button("✅ Validate Lesson"):
     ok, result = validate_output(MOTHERDUCK_SHARE, lesson["validation"])
     if ok:
