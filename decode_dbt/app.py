@@ -196,12 +196,19 @@ if st.session_state.get("dbt_ran", False):
 # ====================================
 # SQL SANDBOX + BI DASHBOARD
 # ====================================
+
 if st.session_state.get("dbt_ran", False):
     st.header("🧪 SQL Sandbox — Query Your Data")
+
     if "sql_query" not in st.session_state:
         st.session_state["sql_query"] = "SELECT * FROM information_schema.tables LIMIT 5;"
 
-    query = st.text_area("Write your SQL query:", value=st.session_state["sql_query"], height=200, key="sql_editor")
+    query = st.text_area(
+        "Write your SQL query:",
+        value=st.session_state["sql_query"],
+        height=200,
+        key="sql_editor"
+    )
 
     if st.button("▶️ Run Query", key="run_query_btn"):
         st.session_state["sql_query"] = query
@@ -220,7 +227,7 @@ if st.session_state.get("dbt_ran", False):
 
         st.subheader("📊 BI Dashboard")
         all_columns = df.columns.tolist()
-        numeric_cols = df.select_dtypes(include=["int64","float64"]).columns.tolist()
+        numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
 
         if len(all_columns) >= 2:
             with st.expander("Customize Dashboard", expanded=True):
@@ -240,6 +247,7 @@ if st.session_state.get("dbt_ran", False):
 # ====================================
 # VALIDATION
 # ====================================
+
 if st.button("✅ Validate Lesson"):
     ok, result = validate_output(MOTHERDUCK_SHARE, lesson["validation"])
     if ok:
