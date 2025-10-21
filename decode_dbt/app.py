@@ -88,24 +88,37 @@ def run_dbt_command(command, workdir):
     )
     return result.stdout + "\n" + result.stderr
 
-@st.cache_resource(show_spinner=False)
 def get_duckdb_connection():
+    """Create a fresh connection for each use"""
     return duckdb.connect(f"md:{MOTHERDUCK_SHARE}?motherduck_token={MOTHERDUCK_TOKEN}")
 
 def list_tables(schema):
+    """List tables in the specified schema"""
     try:
         con = get_duckdb_connection()
-        con.execute(f"SET SCHEMA {schema}")
-        df = con.execute("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema()").fetchdf()
+        # Use fully qualified query instead of SET SCHEMA
+        query = f"""
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = '{schema}'
+        ORDER BY table_name
+        """
+        df = con.execute(query).fetchdf()
+        con.close()
         return df["table_name"].tolist() if not df.empty else []
     except Exception as e:
         st.error(f"Error listing tables: {e}")
         return []
 
-def validate_output(md_db, validation):
+def validate_output(schema, validation):
+    """Validate that the expected number of models were built"""
     try:
         con = get_duckdb_connection()
+        # Set schema first, then execute validation query
+        con.execute(f"USE {MOTHERDUCK_SHARE}")
+        con.execute(f"SET SCHEMA '{schema}'")
         res = con.execute(validation["sql"]).fetchdf().to_dict(orient="records")[0]
+        con.close()
         return res.get("models_built", 0) >= validation["expected_min"], res
     except Exception as e:
         return False, {"error": str(e)}
@@ -212,7 +225,11 @@ if st.session_state.get("dbt_ran", False):
     st.header("📋 Tables in Your Schema")
     if "tables_list" not in st.session_state:
         st.session_state["tables_list"] = list_tables(LEARNER_SCHEMA)
-    st.dataframe(pd.DataFrame(st.session_state["tables_list"], columns=["table_name"]))
+    
+    if st.session_state["tables_list"]:
+        st.dataframe(pd.DataFrame(st.session_state["tables_list"], columns=["table_name"]))
+    else:
+        st.info("No tables found in your schema yet.")
 
 # ====================================
 # SQL SANDBOX + MINI BI DASHBOARD
@@ -220,7 +237,7 @@ if st.session_state.get("dbt_ran", False):
 if st.session_state.get("dbt_ran", False):
     st.header("🧪 SQL Sandbox — Query Your Data")
     if "sql_query" not in st.session_state:
-        st.session_state["sql_query"] = "SELECT * FROM information_schema.tables LIMIT 5;"
+        st.session_state["sql_query"] = f"SELECT * FROM {LEARNER_SCHEMA}.information_schema.tables LIMIT 5;"
 
     query = st.text_area(
         "Write your SQL query:",
@@ -233,7 +250,12 @@ if st.session_state.get("dbt_ran", False):
         st.session_state["sql_query"] = query
         try:
             con = get_duckdb_connection()
-            df = con.execute(f"SET SCHEMA {LEARNER_SCHEMA}; {query}").fetchdf()
+            # Set the database and schema context properly
+            con.execute(f"USE {MOTHERDUCK_SHARE}")
+            con.execute(f"SET SCHEMA '{LEARNER_SCHEMA}'")
+            # Execute the user's query
+            df = con.execute(query).fetchdf()
+            con.close()
             st.session_state["query_result"] = df
             st.success("✅ Query ran successfully!")
         except Exception as e:
@@ -267,7 +289,7 @@ if st.session_state.get("dbt_ran", False):
 # VALIDATION
 # ====================================
 if st.button("✅ Validate Lesson"):
-    ok, result = validate_output(MOTHERDUCK_SHARE, lesson["validation"])
+    ok, result = validate_output(LEARNER_SCHEMA, lesson["validation"])
     if ok:
         st.success(f"🎉 Lesson passed! Tables created: {result}")
     else:
