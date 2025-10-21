@@ -5,6 +5,7 @@ import os
 import duckdb
 import shutil
 import hashlib
+import pandas as pd
 
 # ============================
 # APP SETUP
@@ -49,11 +50,21 @@ st.info(f"✅ Sandbox schema: `{LEARNER_SCHEMA}`")
 # ============================
 
 LESSONS = [
-    {"id":"01_hello_dbt","title":"Hello dbt!","description":"Learn your first dbt model using MotherDuck.","model_file":"models/my_first_model.sql","validation":{"sql":"SELECT COUNT(*) AS rowcount FROM my_first_model","expected":{"rowcount":3}}},
-    {"id":"02_transform_orders","title":"Transform Orders","description":"Filter, rename columns, create a derived table.","model_file":"models/transform_orders.sql","validation":{"sql":"SELECT COUNT(*) AS rowcount FROM transform_orders WHERE amount > 0","expected":{"rowcount":3}}},
-    {"id":"03_aggregate_sales","title":"Aggregate Sales","description":"Aggregate orders by status and sum total_amount.","model_file":"models/aggregate_sales.sql","validation":{"sql":"SELECT SUM(total_amount) AS total_sales FROM aggregate_sales","expected":{"total_sales":450}}},
-    {"id":"04_join_customers","title":"Join Customers","description":"Join orders with customer info.","model_file":"models/join_customers.sql","validation":{"sql":"SELECT COUNT(*) AS rowcount FROM join_customers WHERE customer_region='US'","expected":{"rowcount":3}}},
-    {"id":"05_data_quality_checks","title":"Data Quality Checks","description":"Check for nulls and invalid data.","model_file":"models/data_quality.sql","validation":{"sql":"SELECT COUNT(*) AS invalid_rows FROM data_quality WHERE total_amount IS NULL","expected":{"invalid_rows":0}}}
+    {"id": "01_hello_dbt", "title": "Hello dbt!", "description": "Learn your first dbt model using MotherDuck.",
+     "model_file": "models/my_first_model.sql",
+     "validation": {"sql": "SELECT COUNT(*) AS rowcount FROM my_first_model", "expected": {"rowcount": 3}}},
+    {"id": "02_transform_orders", "title": "Transform Orders", "description": "Filter, rename columns, create a derived table.",
+     "model_file": "models/transform_orders.sql",
+     "validation": {"sql": "SELECT COUNT(*) AS rowcount FROM transform_orders WHERE amount > 0", "expected": {"rowcount": 3}}},
+    {"id": "03_aggregate_sales", "title": "Aggregate Sales", "description": "Aggregate orders by status and sum total_amount.",
+     "model_file": "models/aggregate_sales.sql",
+     "validation": {"sql": "SELECT SUM(total_amount) AS total_sales FROM aggregate_sales", "expected": {"total_sales": 450}}},
+    {"id": "04_join_customers", "title": "Join Customers", "description": "Join orders with customer info.",
+     "model_file": "models/join_customers.sql",
+     "validation": {"sql": "SELECT COUNT(*) AS rowcount FROM join_customers WHERE customer_region='US'", "expected": {"rowcount": 3}}},
+    {"id": "05_data_quality_checks", "title": "Data Quality Checks", "description": "Check for nulls and invalid data.",
+     "model_file": "models/data_quality.sql",
+     "validation": {"sql": "SELECT COUNT(*) AS invalid_rows FROM data_quality WHERE total_amount IS NULL", "expected": {"invalid_rows": 0}}}
 ]
 
 # ============================
@@ -75,6 +86,7 @@ def run_dbt_command(command, workdir):
 def validate_output(md_db, validation):
     try:
         con = duckdb.connect(f"md:{md_db}?motherduck_token={MOTHERDUCK_TOKEN}")
+        con.execute(f"SET schema '{LEARNER_SCHEMA}'")
         res = con.execute(validation["sql"]).fetchdf().to_dict(orient="records")[0]
         con.close()
         return all(res.get(k) == v for k, v in validation["expected"].items()), res
@@ -127,7 +139,7 @@ decode_dbt:
 
 # Step 2: SQL editor
 if "dbt_dir" in st.session_state:
-    model_path = os.path.join(st.session_state["dbt_dir"], lesson.get("model_file",""))
+    model_path = os.path.join(st.session_state["dbt_dir"], lesson.get("model_file", ""))
     if not os.path.exists(model_path):
         st.warning(f"⚠️ Model file not found: {model_path}")
         st.stop()
@@ -138,20 +150,15 @@ if "dbt_dir" in st.session_state:
     if st.button("💾 Save & Run Model"):
         save_model_sql(model_path, edited_sql)
 
-        # Run seeds
-        seed_dir = os.path.join(st.session_state["dbt_dir"], "seeds")
-        if not os.path.exists(seed_dir):
-            st.error("❌ Seed folder not found!")
-        else:
-            with st.spinner("Running dbt seed..."):
-                logs_seed = run_dbt_command("seed", st.session_state["dbt_dir"])
-                st.code(logs_seed, language="bash")
+        with st.spinner("Running dbt seed..."):
+            logs_seed = run_dbt_command("seed", st.session_state["dbt_dir"])
+            st.code(logs_seed, language="bash")
 
-            with st.spinner("Running dbt models..."):
-                logs_run = run_dbt_command("run", st.session_state["dbt_dir"])
-                st.code(logs_run, language="bash")
+        with st.spinner("Running dbt models..."):
+            logs_run = run_dbt_command("run", st.session_state["dbt_dir"])
+            st.code(logs_run, language="bash")
 
-            st.session_state["dbt_ran"] = True
+        st.session_state["dbt_ran"] = True
 
 # Step 3: Validate Lesson
 if "dbt_dir" in st.session_state:
@@ -161,3 +168,32 @@ if "dbt_dir" in st.session_state:
             st.success(f"🎉 Lesson passed! Result: {result}")
         else:
             st.error(f"❌ Validation failed. Got: {result}")
+
+# ============================
+# STEP 4: SQL SANDBOX (NEW)
+# ============================
+
+st.markdown("---")
+st.header("🧠 SQL Sandbox — Query Your Data")
+
+st.markdown(
+    f"You are connected to your personal schema: `{LEARNER_SCHEMA}`. You can query any table created by dbt!"
+)
+
+query = st.text_area("💻 Write your SQL query below:", value=f"SELECT * FROM {LEARNER_SCHEMA}.my_first_model LIMIT 5;")
+
+if st.button("▶️ Run Query"):
+    try:
+        con = duckdb.connect(f"md:{MOTHERDUCK_SHARE}?motherduck_token={MOTHERDUCK_TOKEN}")
+        con.execute(f"SET schema '{LEARNER_SCHEMA}'")
+        df = con.execute(query).fetchdf()
+        con.close()
+
+        st.success("✅ Query executed successfully!")
+        st.dataframe(df, use_container_width=True)
+
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button("⬇️ Download results as CSV", data=csv, file_name="query_results.csv", mime="text/csv")
+
+    except Exception as e:
+        st.error(f"❌ Error: {e}")
