@@ -213,7 +213,7 @@ if st.session_state.get("dbt_ran", False):
         if len(all_columns) >= 2:
             with st.expander("Customize Dashboard", expanded=True):
                 x_axis = st.selectbox("X-Axis", all_columns, key="bi_xaxis")
-                y_axis = st.selectbox("Y-Axis", numeric_cols or all_columns, key="bi_yaxis")
+                y_axis = st.selectbox("Y-Axis", all_columns, key="bi_yaxis")
                 chart_type = st.radio("Chart Type", ["Bar", "Line", "Area"], horizontal=True, key="bi_chart")
 
             chart = alt.Chart(df).mark_bar().encode(x=x_axis, y=y_axis)
