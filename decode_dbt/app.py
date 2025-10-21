@@ -8,23 +8,24 @@ import hashlib
 import pandas as pd
 import altair as alt
 
-# ============================
-# APP SETUP
-# ============================
+# ====================================
+# APP CONFIGURATION
+# ====================================
 
 st.set_page_config(page_title="Decode dbt", page_icon="🦆", layout="wide")
 st.title("🦆 Decode dbt — Learn dbt with MotherDuck")
 
+# Get MotherDuck token from secrets
 MOTHERDUCK_TOKEN = st.secrets.get("MOTHERDUCK_TOKEN", None)
 if not MOTHERDUCK_TOKEN:
-    st.error("❌ Missing MotherDuck token. Set it in Streamlit secrets.")
+    st.error("❌ Missing MotherDuck token. Add it to Streamlit secrets.")
     st.stop()
 
 MOTHERDUCK_SHARE = "decode_dbt"
 
-# ============================
-# LEARNER SCHEMA
-# ============================
+# ====================================
+# LEARNER SETUP
+# ====================================
 
 def set_learner_id():
     learner_id = st.session_state["input_learner_id"].strip()
@@ -32,8 +33,12 @@ def set_learner_id():
         st.session_state["learner_id"] = learner_id
         hash_str = hashlib.sha256(learner_id.encode()).hexdigest()[:8]
         st.session_state["learner_schema"] = f"learner_{hash_str}"
+        # Reset sandbox if learner changes
+        st.session_state.pop("dbt_dir", None)
+        st.session_state.pop("dbt_ran", None)
+        st.session_state.pop("query_result", None)
 
-if "learner_id" not in st.session_state or "learner_schema" not in st.session_state:
+if "learner_id" not in st.session_state:
     st.text_input("👤 Enter your unique learner ID (email or username):",
                   key="input_learner_id", on_change=set_learner_id)
     st.stop()
@@ -41,15 +46,15 @@ if "learner_id" not in st.session_state or "learner_schema" not in st.session_st
 LEARNER_SCHEMA = st.session_state["learner_schema"]
 st.info(f"✅ Sandbox schema: `{LEARNER_SCHEMA}`")
 
-# ============================
-# LESSON CONFIG
-# ============================
+# ====================================
+# LESSON CONFIGURATION
+# ====================================
 
 LESSONS = [
     {
         "id": "cafe_chain",
         "title": "Café Chain Analytics",
-        "description": "Build models to analyze coffee shop sales and customer loyalty.",
+        "description": "Analyze coffee shop sales and customer loyalty.",
         "model_dir": "models/cafe_chain",
         "validation": {
             "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema = current_schema()",
@@ -59,7 +64,7 @@ LESSONS = [
     {
         "id": "energy_smart",
         "title": "Energy Startup: Smart Meter Data",
-        "description": "Model IoT readings and calculate energy consumption KPIs.",
+        "description": "Model IoT readings and calculate energy KPIs.",
         "model_dir": "models/energy_smart",
         "validation": {
             "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema = current_schema()",
@@ -68,56 +73,58 @@ LESSONS = [
     }
 ]
 
-# ============================
-# HELPERS
-# ============================
+# ====================================
+# HELPER FUNCTIONS
+# ====================================
 
 def run_dbt_command(command, workdir):
+    """Run dbt commands in subprocess with proper env."""
     env = os.environ.copy()
     env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
-    result = subprocess.run(["dbt"] + command.split(), cwd=workdir,
-                            capture_output=True, text=True, env=env)
+    result = subprocess.run(
+        ["dbt"] + command.split(),
+        cwd=workdir,
+        capture_output=True,
+        text=True,
+        env=env
+    )
     return result.stdout + "\n" + result.stderr
 
-def connect_motherduck():
+@st.cache_resource(show_spinner=False)
+def get_duckdb_connection():
     return duckdb.connect(f"md:{MOTHERDUCK_SHARE}?motherduck_token={MOTHERDUCK_TOKEN}")
 
 def validate_output(md_db, validation):
     try:
-        con = connect_motherduck()
+        con = get_duckdb_connection()
         res = con.execute(validation["sql"]).fetchdf().to_dict(orient="records")[0]
-        con.close()
         return res.get("models_built", 0) >= validation["expected_min"], res
     except Exception as e:
         return False, {"error": str(e)}
 
 def load_model_sql(model_path):
-    if os.path.exists(model_path):
-        with open(model_path, "r") as f:
-            return f.read()
-    return ""
+    return open(model_path).read() if os.path.exists(model_path) else ""
 
 def save_model_sql(model_path, sql):
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
     with open(model_path, "w") as f:
         f.write(sql)
 
-# ============================
+# ====================================
 # LESSON SELECTION
-# ============================
+# ====================================
 
 lesson = st.selectbox("📘 Select Lesson", LESSONS, format_func=lambda x: x["title"])
 st.markdown(f"**Description:** {lesson['description']}")
 
-# ============================
+# ====================================
 # SANDBOX SETUP
-# ============================
+# ====================================
 
 if st.button("🚀 Initialize Lesson"):
     if "dbt_dir" not in st.session_state:
-        st.session_state["dbt_dir"] = tempfile.mkdtemp(prefix="dbt_")
-        shutil.copytree("dbt_project", st.session_state["dbt_dir"], dirs_exist_ok=True)
-
+        tmp_dir = tempfile.mkdtemp(prefix="dbt_")
+        shutil.copytree("dbt_project", tmp_dir, dirs_exist_ok=True)
         profiles_yml = f"""
 decode_dbt:
   target: dev
@@ -129,17 +136,16 @@ decode_dbt:
       threads: 4
       motherduck_token: {MOTHERDUCK_TOKEN}
 """
-        with open(f"{st.session_state['dbt_dir']}/profiles.yml", "w") as f:
+        with open(os.path.join(tmp_dir, "profiles.yml"), "w") as f:
             f.write(profiles_yml)
-
+        st.session_state["dbt_dir"] = tmp_dir
         st.success(f"✅ Sandbox initialized for `{lesson['title']}`")
-        st.session_state["dbt_ran"] = False
     else:
         st.info("Sandbox already initialized.")
 
-# ============================
+# ====================================
 # MODEL EXPLORER + EDITOR
-# ============================
+# ====================================
 
 if "dbt_dir" in st.session_state:
     model_dir = os.path.join(st.session_state["dbt_dir"], lesson["model_dir"])
@@ -152,23 +158,25 @@ if "dbt_dir" in st.session_state:
 
     model_path = os.path.join(model_dir, model_choice)
     sql_code = load_model_sql(model_path)
-    edited_sql = st.text_area("✏️ Edit Model SQL", value=sql_code, height=200)
+    edited_sql = st.text_area("✏️ Edit Model SQL", value=sql_code, height=200, key=model_choice)
 
     if st.button("💾 Save Model"):
         save_model_sql(model_path, edited_sql)
-        st.success("Model saved!")
+        st.success("✅ Model saved!")
 
     if st.button("🏃 Run dbt (seed + run)"):
         with st.spinner("Running dbt seed..."):
-            st.code(run_dbt_command("seed", st.session_state["dbt_dir"]), language="bash")
+            seed_logs = run_dbt_command("seed", st.session_state["dbt_dir"])
+            st.code(seed_logs, language="bash")
         with st.spinner("Running dbt models..."):
-            st.code(run_dbt_command(f"run --select {lesson['id']}", st.session_state["dbt_dir"]), language="bash")
+            run_logs = run_dbt_command(f"run --select {lesson['id']}", st.session_state["dbt_dir"])
+            st.code(run_logs, language="bash")
         st.session_state["dbt_ran"] = True
         st.success("✅ dbt run complete!")
 
-# ============================
+# ====================================
 # SQL SANDBOX + BI DASHBOARD
-# ============================
+# ====================================
 
 if st.session_state.get("dbt_ran", False):
     st.header("🧪 SQL Sandbox — Query Your Data")
@@ -177,55 +185,49 @@ if st.session_state.get("dbt_ran", False):
         st.session_state["sql_query"] = "SELECT * FROM information_schema.tables LIMIT 5;"
 
     query = st.text_area(
-        "Write your SQL query below:",
+        "Write your SQL query:",
         value=st.session_state["sql_query"],
         height=200,
         key="sql_editor"
     )
 
-    if st.button("▶️ Run Query"):
+    if st.button("▶️ Run Query", key="run_query_btn"):
         st.session_state["sql_query"] = query
         try:
-            con = connect_motherduck()
-            df = con.execute(st.session_state["sql_query"]).df()
-            con.close()
+            con = get_duckdb_connection()
+            df = con.execute(query).fetchdf()
             st.session_state["query_result"] = df
             st.success("✅ Query ran successfully!")
         except Exception as e:
-            st.error(f"Error running query: {e}")
+            st.error(f"❌ Query error: {e}")
 
-    if "query_result" in st.session_state:
+    if "query_result" in st.session_state and not st.session_state["query_result"].empty:
         df = st.session_state["query_result"]
-        st.subheader("Query Result")
+        st.subheader("📋 Query Result")
         st.dataframe(df, use_container_width=True)
 
-        st.divider()
-        st.subheader("📊 Mini BI Dashboard")
+        st.subheader("📊 BI Dashboard")
+        all_columns = df.columns.tolist()
+        numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
 
-        if not df.empty:
-            numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
-            category_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+        if len(all_columns) >= 2:
+            with st.expander("Customize Dashboard", expanded=True):
+                x_axis = st.selectbox("X-Axis", all_columns, key="bi_xaxis")
+                y_axis = st.selectbox("Y-Axis", numeric_cols or all_columns, key="bi_yaxis")
+                chart_type = st.radio("Chart Type", ["Bar", "Line", "Area"], horizontal=True, key="bi_chart")
 
-            if numeric_cols and category_cols:
-                with st.expander("Customize Dashboard", expanded=True):
-                    x_axis = st.selectbox("X-Axis (Category)", category_cols, key="bi_xaxis")
-                    y_axis = st.selectbox("Y-Axis (Value)", numeric_cols, key="bi_yaxis")
-                    chart_type = st.radio("Chart Type", ["Bar", "Line", "Area"], horizontal=True, key="bi_chart")
+            chart = alt.Chart(df).mark_bar().encode(x=x_axis, y=y_axis)
+            if chart_type == "Line":
+                chart = alt.Chart(df).mark_line().encode(x=x_axis, y=y_axis)
+            elif chart_type == "Area":
+                chart = alt.Chart(df).mark_area().encode(x=x_axis, y=y_axis)
+            st.altair_chart(chart, use_container_width=True)
+        else:
+            st.info("Add at least two columns to visualize your query output.")
 
-                if chart_type == "Bar":
-                    chart = alt.Chart(df).mark_bar().encode(x=x_axis, y=y_axis)
-                elif chart_type == "Line":
-                    chart = alt.Chart(df).mark_line().encode(x=x_axis, y=y_axis)
-                else:
-                    chart = alt.Chart(df).mark_area().encode(x=x_axis, y=y_axis)
-
-                st.altair_chart(chart, use_container_width=True)
-            else:
-                st.info("Add some categorical and numeric columns in your query to explore charts.")
-
-# ============================
+# ====================================
 # VALIDATION
-# ============================
+# ====================================
 
 if st.button("✅ Validate Lesson"):
     ok, result = validate_output(MOTHERDUCK_SHARE, lesson["validation"])
