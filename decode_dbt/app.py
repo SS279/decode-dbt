@@ -131,6 +131,12 @@ def save_model_sql(model_path, sql):
     with open(model_path, "w") as f:
         f.write(sql)
 
+def get_model_files(model_dir):
+    """Get all .sql model files in the directory"""
+    if not os.path.exists(model_dir):
+        return []
+    return sorted([f for f in os.listdir(model_dir) if f.endswith(".sql")])
+
 # ====================================
 # LESSON SELECTION
 # ====================================
@@ -171,7 +177,12 @@ if "dbt_dir" in st.session_state:
         st.warning("⚠️ Model directory not found for this lesson.")
         st.stop()
 
-    model_files = [f for f in os.listdir(model_dir) if f.endswith(".sql")]
+    model_files = get_model_files(model_dir)
+    
+    if not model_files:
+        st.warning("⚠️ No model files found for this lesson.")
+        st.stop()
+    
     model_choice = st.selectbox("🧠 Choose a model to view/edit", model_files)
 
     model_path = os.path.join(model_dir, model_choice)
@@ -187,8 +198,68 @@ if "dbt_dir" in st.session_state:
 # ====================================
 if "dbt_dir" in st.session_state:
     st.subheader("🏃 Run dbt Models & Seeds")
-    run_option = st.radio("Choose Run Option:", ["Run All Models", "Run Selected Model"], index=0)
-    if st.button("▶️ Run dbt + Seed", key="run_dbt_btn"):
+    
+    # Get available models for checkbox selection
+    model_dir = os.path.join(st.session_state["dbt_dir"], lesson["model_dir"])
+    model_files = get_model_files(model_dir)
+    
+    # Create columns for better layout
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("**Select Models to Run:**")
+        
+        # Initialize session state for checkboxes if not exists
+        if "selected_models" not in st.session_state:
+            st.session_state["selected_models"] = {}
+        
+        # Create checkboxes for each model
+        selected_models = []
+        for model_file in model_files:
+            model_name = model_file.replace(".sql", "")
+            is_selected = st.checkbox(
+                f"📄 {model_name}", 
+                value=st.session_state["selected_models"].get(model_name, False),
+                key=f"check_{model_name}"
+            )
+            st.session_state["selected_models"][model_name] = is_selected
+            if is_selected:
+                selected_models.append(model_name)
+    
+    with col2:
+        st.markdown("**Run Options:**")
+        
+        # Option to select all/none
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("✅ Select All"):
+                for model_file in model_files:
+                    model_name = model_file.replace(".sql", "")
+                    st.session_state["selected_models"][model_name] = True
+                st.rerun()
+        
+        with col_b:
+            if st.button("❌ Clear All"):
+                for model_file in model_files:
+                    model_name = model_file.replace(".sql", "")
+                    st.session_state["selected_models"][model_name] = False
+                st.rerun()
+        
+        # Option to include children
+        include_children = st.checkbox(
+            "Include child models (+)", 
+            value=False,
+            help="Run downstream dependencies of selected models"
+        )
+    
+    # Display selected models
+    if selected_models:
+        st.info(f"📋 Selected models: {', '.join(selected_models)}")
+    else:
+        st.warning("⚠️ No models selected. Please select at least one model to run.")
+    
+    # Run button
+    if st.button("▶️ Run dbt + Seed", key="run_dbt_btn", disabled=len(selected_models) == 0):
         # Run lesson-specific seeds
         seed_dir = os.path.join(st.session_state["dbt_dir"], lesson["model_dir"], "seeds")
         if os.path.exists(seed_dir):
@@ -197,26 +268,33 @@ if "dbt_dir" in st.session_state:
                 with st.spinner("Running lesson seeds..."):
                     for seed_file in seed_files:
                         seed_name = seed_file.replace(".csv", "")
-                        st.code(run_dbt_command(f"seed --select {lesson['id']}.{seed_name}", st.session_state["dbt_dir"]), language="bash")
+                        seed_logs = run_dbt_command(f"seed --select {lesson['id']}.{seed_name}", st.session_state["dbt_dir"])
+                        with st.expander(f"📦 Seed: {seed_name}"):
+                            st.code(seed_logs, language="bash")
             else:
                 st.info("No seeds found for this lesson.")
         else:
             st.info("No seed folder for this lesson.")
 
-        # Run models
-        if run_option == "Run All Models":
-            with st.spinner("Running all models..."):
-                run_logs = run_dbt_command(f"run --select {lesson['id']}", st.session_state["dbt_dir"])
-                st.code(run_logs, language="bash")
-        else:
-            model_name = model_choice.split(".")[0]
-            with st.spinner(f"Running selected model: {model_name}"):
-                run_logs = run_dbt_command(f"run --select {lesson['id']}.{model_name}", st.session_state["dbt_dir"])
-                st.code(run_logs, language="bash")
+        # Run selected models
+        with st.spinner(f"Running {len(selected_models)} selected model(s)..."):
+            for model_name in selected_models:
+                # Build selector with optional children
+                if include_children:
+                    selector = f"{lesson['id']}.{model_name}+"
+                else:
+                    selector = f"{lesson['id']}.{model_name}"
+                
+                run_logs = run_dbt_command(f"run --select {selector}", st.session_state["dbt_dir"])
+                
+                # Display logs in expander
+                status_icon = "✅" if "Completed successfully" in run_logs or "SUCCESS" in run_logs else "⚠️"
+                with st.expander(f"{status_icon} Model: {model_name}{'+ (with children)' if include_children else ''}"):
+                    st.code(run_logs, language="bash")
 
         st.session_state["dbt_ran"] = True
         st.session_state["tables_list"] = list_tables(LEARNER_SCHEMA)
-        st.success("✅ dbt run complete!")
+        st.success(f"✅ dbt run complete! Executed {len(selected_models)} model(s).")
 
 # ====================================
 # TABLE EXPLORER
@@ -237,7 +315,7 @@ if st.session_state.get("dbt_ran", False):
 if st.session_state.get("dbt_ran", False):
     st.header("🧪 SQL Sandbox — Query Your Data")
     if "sql_query" not in st.session_state:
-        st.session_state["sql_query"] = f"SELECT * FROM {LEARNER_SCHEMA}.information_schema.tables LIMIT 5;"
+        st.session_state["sql_query"] = f"SELECT * FROM information_schema.tables WHERE table_schema = '{LEARNER_SCHEMA}' LIMIT 5;"
 
     query = st.text_area(
         "Write your SQL query:",
