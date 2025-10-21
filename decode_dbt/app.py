@@ -117,7 +117,6 @@ def get_connection():
 lesson = st.selectbox("📘 Select Lesson", LESSONS, format_func=lambda x: x["title"])
 st.markdown(f"**Description:** {lesson['description']}")
 
-# Step 1: Initialize sandbox
 if st.button("🚀 Start Lesson"):
     if "dbt_dir" not in st.session_state:
         st.session_state["dbt_dir"] = tempfile.mkdtemp(prefix="dbt_")
@@ -142,7 +141,10 @@ decode_dbt:
     else:
         st.info("Sandbox already initialized.")
 
-# Step 2: Model editor
+# ============================
+# MODEL EDITOR + RUNNER
+# ============================
+
 if "dbt_dir" in st.session_state:
     model_path = os.path.join(st.session_state["dbt_dir"], lesson.get("model_file", ""))
     if not os.path.exists(model_path):
@@ -165,7 +167,10 @@ if "dbt_dir" in st.session_state:
 
         st.session_state["dbt_ran"] = True
 
-# Step 3: Validate Lesson
+# ============================
+# VALIDATION
+# ============================
+
 if "dbt_dir" in st.session_state:
     if st.button("✅ Validate Lesson"):
         ok, result = validate_output(MOTHERDUCK_SHARE, lesson["validation"])
@@ -175,7 +180,7 @@ if "dbt_dir" in st.session_state:
             st.error(f"❌ Validation failed. Got: {result}")
 
 # ============================
-# STEP 4: SQL SANDBOX
+# SQL SANDBOX
 # ============================
 
 st.markdown("---")
@@ -189,6 +194,7 @@ if st.button("▶️ Run Query"):
         df = con.execute(query).fetchdf()
         con.close()
 
+        st.session_state["query_df"] = df  # store for BI dashboard
         st.success("✅ Query executed successfully!")
         st.dataframe(df, use_container_width=True)
 
@@ -199,67 +205,35 @@ if st.button("▶️ Run Query"):
         st.error(f"❌ Error: {e}")
 
 # ============================
-# STEP 5: TABLE EXPLORER
+# DYNAMIC BI DASHBOARD
 # ============================
 
 st.markdown("---")
-st.header("🧭 Table Explorer")
+st.header("📊 Interactive BI Dashboard — Visualize Your Query")
 
-try:
-    con = get_connection()
-    tables = con.execute(f"SHOW TABLES").fetchdf()
-    if not tables.empty:
-        table_names = tables["name"].tolist()
-        selected_table = st.selectbox("Select a table to explore:", table_names)
-        if selected_table:
-            col_df = con.execute(f"DESCRIBE {selected_table}").fetchdf()
-            st.subheader(f"🧩 Columns in `{selected_table}`")
-            st.dataframe(col_df, use_container_width=True)
+if "query_df" in st.session_state:
+    df = st.session_state["query_df"]
 
-            sample_df = con.execute(f"SELECT * FROM {selected_table} LIMIT 20").fetchdf()
-            st.subheader(f"🔍 Sample data from `{selected_table}`")
-            st.dataframe(sample_df, use_container_width=True)
+    if not df.empty:
+        cols = df.columns.tolist()
+        x_col = st.selectbox("🧭 X-axis", cols, index=0)
+        y_col = st.selectbox("📈 Y-axis", cols, index=min(1, len(cols)-1))
+        chart_type = st.radio("📊 Chart Type", ["Bar", "Line", "Scatter", "Pie"], horizontal=True)
+
+        if chart_type == "Bar":
+            chart = alt.Chart(df).mark_bar().encode(x=x_col, y=y_col, tooltip=cols)
+        elif chart_type == "Line":
+            chart = alt.Chart(df).mark_line().encode(x=x_col, y=y_col, tooltip=cols)
+        elif chart_type == "Scatter":
+            chart = alt.Chart(df).mark_circle(size=60).encode(x=x_col, y=y_col, tooltip=cols)
+        elif chart_type == "Pie":
+            chart = alt.Chart(df).mark_arc().encode(theta=alt.Theta(y_col, type="quantitative"), color=x_col)
+        else:
+            chart = None
+
+        if chart:
+            st.altair_chart(chart, use_container_width=True)
     else:
-        st.info("No tables found in your schema yet. Try running a dbt model first.")
-    con.close()
-except Exception as e:
-    st.error(f"Error fetching tables: {e}")
-
-# ============================
-# STEP 6: MINI BI DASHBOARD
-# ============================
-
-st.markdown("---")
-st.header("📊 Mini BI Dashboard")
-
-try:
-    con = get_connection()
-    # Automatically detect sales-like table
-    tables = con.execute(f"SHOW TABLES").fetchdf()["name"].tolist()
-    chart_data = None
-
-    if "aggregate_sales" in tables:
-        chart_data = con.execute(f"SELECT * FROM aggregate_sales").fetchdf()
-        st.subheader("💰 Sales by Status")
-        chart = alt.Chart(chart_data).mark_bar().encode(
-            x="status:N",
-            y="total_amount:Q",
-            color="status:N"
-        ).properties(width=600, height=400)
-        st.altair_chart(chart, use_container_width=True)
-
-    elif "transform_orders" in tables:
-        chart_data = con.execute(f"SELECT customer_id, amount FROM transform_orders").fetchdf()
-        st.subheader("📦 Orders Overview")
-        chart = alt.Chart(chart_data).mark_circle(size=80).encode(
-            x="customer_id:N",
-            y="amount:Q",
-            tooltip=["customer_id", "amount"]
-        ).interactive()
-        st.altair_chart(chart, use_container_width=True)
-
-    else:
-        st.info("Run the lessons to create tables before exploring the dashboard.")
-    con.close()
-except Exception as e:
-    st.error(f"Dashboard error: {e}")
+        st.info("Run a query to generate data for visualisation.")
+else:
+    st.info("👆 Run a SQL query above to see your BI dashboard here.")
