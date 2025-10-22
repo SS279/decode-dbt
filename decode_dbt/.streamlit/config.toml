@@ -1,0 +1,6 @@
+[server]
+enableCORS = true
+enableXsrfProtection = true
+
+[browser]
+serverAddress = "decodedbt.decodedata.co.uk"
