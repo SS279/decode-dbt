@@ -213,18 +213,39 @@ if "dbt_dir" in st.session_state:
         if "selected_models" not in st.session_state:
             st.session_state["selected_models"] = {}
         
+        # Initialize select_all_trigger if not exists
+        if "select_all_trigger" not in st.session_state:
+            st.session_state["select_all_trigger"] = False
+        if "clear_all_trigger" not in st.session_state:
+            st.session_state["clear_all_trigger"] = False
+        
         # Create checkboxes for each model
         selected_models = []
         for model_file in model_files:
             model_name = model_file.replace(".sql", "")
+            
+            # Determine default value based on triggers
+            if st.session_state["select_all_trigger"]:
+                default_value = True
+            elif st.session_state["clear_all_trigger"]:
+                default_value = False
+            else:
+                default_value = st.session_state["selected_models"].get(model_name, False)
+            
             is_selected = st.checkbox(
                 f"📄 {model_name}", 
-                value=st.session_state["selected_models"].get(model_name, False),
+                value=default_value,
                 key=f"check_{model_name}"
             )
             st.session_state["selected_models"][model_name] = is_selected
             if is_selected:
                 selected_models.append(model_name)
+        
+        # Reset triggers after processing
+        if st.session_state["select_all_trigger"]:
+            st.session_state["select_all_trigger"] = False
+        if st.session_state["clear_all_trigger"]:
+            st.session_state["clear_all_trigger"] = False
     
     with col2:
         st.markdown("**Run Options:**")
@@ -233,20 +254,14 @@ if "dbt_dir" in st.session_state:
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button("✅ Select All", key="select_all_btn"):
-                for model_file in model_files:
-                    model_name = model_file.replace(".sql", "")
-                    st.session_state["selected_models"][model_name] = True
-                    # Update the checkbox state in session_state
-                    st.session_state[f"check_{model_name}"] = True
+                st.session_state["select_all_trigger"] = True
+                st.session_state["clear_all_trigger"] = False
                 st.rerun()
         
         with col_b:
             if st.button("❌ Clear All", key="clear_all_btn"):
-                for model_file in model_files:
-                    model_name = model_file.replace(".sql", "")
-                    st.session_state["selected_models"][model_name] = False
-                    # Update the checkbox state in session_state
-                    st.session_state[f"check_{model_name}"] = False
+                st.session_state["clear_all_trigger"] = True
+                st.session_state["select_all_trigger"] = False
                 st.rerun()
         
         # Option to include children
