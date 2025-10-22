@@ -276,15 +276,15 @@ if "dbt_dir" in st.session_state:
 # ====================================
 # TABLE EXPLORER
 # ====================================
-if st.session_state.get("dbt_ran", False):
-    st.header("📋 Tables in Your Schema")
-    if "tables_list" not in st.session_state:
-        st.session_state["tables_list"] = list_tables(LEARNER_SCHEMA)
+# if st.session_state.get("dbt_ran", False):
+#     st.header("📋 Tables in Your Schema")
+#     if "tables_list" not in st.session_state:
+#         st.session_state["tables_list"] = list_tables(LEARNER_SCHEMA)
     
-    if st.session_state["tables_list"]:
-        st.dataframe(pd.DataFrame(st.session_state["tables_list"], columns=["table_name"]))
-    else:
-        st.info("No tables found in your schema yet.")
+#     if st.session_state["tables_list"]:
+#         st.dataframe(pd.DataFrame(st.session_state["tables_list"], columns=["table_name"]))
+#     else:
+#         st.info("No tables found in your schema yet.")
 
 # ====================================
 # SQL SANDBOX + MINI BI DASHBOARD
