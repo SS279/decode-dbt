@@ -232,17 +232,21 @@ if "dbt_dir" in st.session_state:
         # Option to select all/none
         col_a, col_b = st.columns(2)
         with col_a:
-            if st.button("✅ Select All"):
+            if st.button("✅ Select All", key="select_all_btn"):
                 for model_file in model_files:
                     model_name = model_file.replace(".sql", "")
                     st.session_state["selected_models"][model_name] = True
+                    # Update the checkbox state in session_state
+                    st.session_state[f"check_{model_name}"] = True
                 st.rerun()
         
         with col_b:
-            if st.button("❌ Clear All"):
+            if st.button("❌ Clear All", key="clear_all_btn"):
                 for model_file in model_files:
                     model_name = model_file.replace(".sql", "")
                     st.session_state["selected_models"][model_name] = False
+                    # Update the checkbox state in session_state
+                    st.session_state[f"check_{model_name}"] = False
                 st.rerun()
         
         # Option to include children
@@ -260,21 +264,21 @@ if "dbt_dir" in st.session_state:
     
     # Run button
     if st.button("▶️ Run dbt + Seed", key="run_dbt_btn", disabled=len(selected_models) == 0):
-        # Run lesson-specific seeds
-        seed_dir = os.path.join(st.session_state["dbt_dir"], lesson["model_dir"], "seeds")
+        # Run lesson-specific seeds - seeds are at project root level
+        seed_dir = os.path.join(st.session_state["dbt_dir"], "seeds", lesson["id"])
         if os.path.exists(seed_dir):
             seed_files = [f for f in os.listdir(seed_dir) if f.endswith(".csv")]
             if seed_files:
                 with st.spinner("Running lesson seeds..."):
                     for seed_file in seed_files:
                         seed_name = seed_file.replace(".csv", "")
-                        seed_logs = run_dbt_command(f"seed --select {lesson['id']}.{seed_name}", st.session_state["dbt_dir"])
+                        seed_logs = run_dbt_command(f"seed --select {seed_name}", st.session_state["dbt_dir"])
                         with st.expander(f"📦 Seed: {seed_name}"):
                             st.code(seed_logs, language="bash")
             else:
                 st.info("No seeds found for this lesson.")
         else:
-            st.info("No seed folder for this lesson.")
+            st.info(f"No seed folder for this lesson. Expected path: seeds/{lesson['id']}")
 
         # Run selected models
         with st.spinner(f"Running {len(selected_models)} selected model(s)..."):
