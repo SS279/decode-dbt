@@ -877,34 +877,10 @@ decode_dbt:
 
 with col2:
     if st.button("🔄 Reset Session", help="Clear current session and start fresh", use_container_width=True):
-        # Save user credentials before clearing
-        user_data = st.session_state.get("user_data")
-        learner_id = st.session_state.get("learner_id")
-        learner_schema = st.session_state.get("learner_schema")
-        storage_api = st.session_state.get("storage_api")
-        authenticated = st.session_state.get("authenticated")
-        
-        # Clean up temp directory if exists
-        if "dbt_dir" in st.session_state:
-            dbt_dir = st.session_state["dbt_dir"]
-            if os.path.exists(dbt_dir):
-                try:
-                    shutil.rmtree(dbt_dir)
-                except:
-                    pass
-        
-        # Clear all session state
+        dbt_dir = st.session_state.get("dbt_dir")
         for key in list(st.session_state.keys()):
-            st.session_state.pop(key)
-        
-        # Restore user credentials
-        st.session_state["authenticated"] = authenticated
-        st.session_state["user_data"] = user_data
-        st.session_state["learner_id"] = learner_id
-        st.session_state["learner_schema"] = learner_schema
-        st.session_state["storage_api"] = storage_api
-        
-        st.success("✅ Session reset! Environment cleared.")
+            if key not in ["authenticated", "user_data", "learner_id", "learner_schema", "storage_api"]:
+                st.session_state.pop(key)
         st.rerun()
 
 # ====================================
@@ -1343,90 +1319,19 @@ if "dbt_dir" in st.session_state:
             **Member Since:** {created_str}
             """)
         
-        # Debug section (expandable) - Only show in development
-        if st.secrets.get("DEBUG_MODE", False) or os.environ.get("DEBUG_MODE", "false").lower() == "true":
-            with st.expander("🔍 Debug: View Raw Progress Data", expanded=False):
-                st.markdown("**Storage Location:**")
-                storage_dir = st.session_state.storage_api.storage_dir
-                st.code(f"Data stored in: {os.path.abspath(storage_dir)}", language="bash")
-                
-                st.markdown("**Current Lesson Progress:**")
-                st.json(current_progress)
-                
-                st.markdown("**All Lessons Progress:**")
-                all_progress_debug = UserManager.get_all_progress(username)
-                st.json(all_progress_debug if all_progress_debug else {})
-                
-                st.markdown("**Storage Files:**")
-                try:
-                    private_dir = os.path.join(storage_dir, "private")
-                    if os.path.exists(private_dir):
-                        files = os.listdir(private_dir)
-                        for f in files:
-                            st.code(f"📄 {f}", language="text")
-                except Exception as e:
-                    st.error(f"Error listing files: {e}")
+        # Debug section (expandable)
+        with st.expander("🔍 Debug: View Raw Progress Data", expanded=False):
+            st.markdown("**Current Lesson Progress:**")
+            st.json(current_progress)
+            
+            st.markdown("**All Lessons Progress:**")
+            all_progress_debug = UserManager.get_all_progress(username)
+            st.json(all_progress_debug if all_progress_debug else {})
 
 # ====================================
 # FOOTER
 # ====================================
 st.markdown("---")
-
-# Storage info section
-with st.expander("💾 Data Storage Information", expanded=False):
-    storage_dir = st.session_state.storage_api.storage_dir
-    abs_path = os.path.abspath(storage_dir)
-    
-    st.markdown(f"""
-    ### 📁 Where Your Data is Stored
-    
-    All user credentials and progress data are stored locally in:
-    
-    ```
-    {abs_path}
-    ```
-    
-    **Directory Structure:**
-    ```
-    {storage_dir}/
-    ├── private/          # User credentials & personal progress (not shared)
-    │   ├── user_<username>.pkl          # Account credentials
-    │   └── progress_<username>_<lesson>.pkl  # Lesson progress
-    └── shared/           # Shared data (if any)
-    ```
-    
-    **Data Privacy:**
-    - ✅ User credentials are hashed (SHA-256)
-    - ✅ Stored in `private/` directory
-    - ✅ Each user's data is separate
-    - ✅ Progress persists across sessions
-    
-    **File Format:** Binary pickle files (.pkl) for efficient storage
-    
-    **To backup your data:** Copy the `.streamlit_storage/` directory
-    
-    **To reset all data:** Delete the `.streamlit_storage/` directory
-    """)
-    
-    # Show actual files
-    st.markdown("**📄 Your Storage Files:**")
-    try:
-        private_dir = os.path.join(storage_dir, "private")
-        if os.path.exists(private_dir):
-            files = sorted(os.listdir(private_dir))
-            if files:
-                for f in files:
-                    file_path = os.path.join(private_dir, f)
-                    file_size = os.path.getsize(file_path)
-                    modified_time = datetime.fromtimestamp(os.path.getmtime(file_path))
-                    st.text(f"📄 {f} ({file_size} bytes) - Modified: {modified_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            else:
-                st.info("No files yet - start learning to create progress data!")
-        else:
-            st.warning("Storage directory not created yet")
-    except Exception as e:
-        st.error(f"Error reading storage: {e}")
-
 st.markdown("""
 <div style="text-align: center; color: #64748b; padding: 1rem 0;">
     <p style="margin: 0;">🦆 Decode dbt - Interactive Learning Platform</p>
