@@ -489,45 +489,60 @@ apply_custom_theme()
 # UI COMPONENTS
 # ====================================
 def create_lesson_card(title, description, icon="📘", progress=0):
-    progress_html = ""
+    # Build the complete HTML in one go to avoid escaping issues
     if progress > 0:
-        progress_html = f"""
+        card_html = f"""
         <div style="
-            width: 100%;
-            height: 6px;
-            background-color: rgba(59, 130, 246, 0.2);
-            border-radius: 3px;
-            margin-top: 0.75rem;
-            overflow: hidden;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
         ">
-            <div style="
-                width: {progress}%;
-                height: 100%;
-                background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-                transition: width 0.3s ease;
-            "></div>
-        </div>
-        <p style="color: #60a5fa; margin: 0.5rem 0 0 0; font-size: 0.85rem; font-weight: 600;">Progress: {progress}%</p>
-        """
-    
-    st.markdown(f"""
-    <div style="
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-        border: 1px solid rgba(59, 130, 246, 0.3);
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-    ">
-        <div style="display: flex; align-items: start; gap: 1rem;">
-            <div style="font-size: 2rem;">{icon}</div>
-            <div style="flex: 1;">
-                <h4 style="color: #93c5fd; margin: 0 0 0.5rem 0; font-size: 1.2rem;">{title}</h4>
-                <p style="color: #94a3b8; margin: 0; font-size: 0.95rem;">{description}</p>
-                {progress_html}
+            <div style="display: flex; align-items: start; gap: 1rem;">
+                <div style="font-size: 2rem;">{icon}</div>
+                <div style="flex: 1;">
+                    <h4 style="color: #93c5fd; margin: 0 0 0.5rem 0; font-size: 1.2rem;">{title}</h4>
+                    <p style="color: #94a3b8; margin: 0 0 0.75rem 0; font-size: 0.95rem;">{description}</p>
+                    <div style="
+                        width: 100%;
+                        height: 6px;
+                        background-color: rgba(59, 130, 246, 0.2);
+                        border-radius: 3px;
+                        overflow: hidden;
+                    ">
+                        <div style="
+                            width: {progress}%;
+                            height: 100%;
+                            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+                            transition: width 0.3s ease;
+                        "></div>
+                    </div>
+                    <p style="color: #60a5fa; margin: 0.5rem 0 0 0; font-size: 0.85rem; font-weight: 600;">Progress: {progress}%</p>
+                </div>
             </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """
+    else:
+        card_html = f"""
+        <div style="
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        ">
+            <div style="display: flex; align-items: start; gap: 1rem;">
+                <div style="font-size: 2rem;">{icon}</div>
+                <div style="flex: 1;">
+                    <h4 style="color: #93c5fd; margin: 0 0 0.5rem 0; font-size: 1.2rem;">{title}</h4>
+                    <p style="color: #94a3b8; margin: 0; font-size: 0.95rem;">{description}</p>
+                </div>
+            </div>
+        </div>
+        """
+    
+    st.markdown(card_html, unsafe_allow_html=True)
 
 # ====================================
 # LOGIN/REGISTER INTERFACE
@@ -1243,13 +1258,24 @@ if "dbt_dir" in st.session_state:
         st.markdown("### 📚 All Lessons Overview")
         all_progress = UserManager.get_all_progress(username)
         
-        if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.values()):
+        # Check if there's any actual progress across all lessons
+        has_progress = False
+        if all_progress:
+            for lesson_id, prog_data in all_progress.items():
+                if prog_data and prog_data.get('lesson_progress', 0) > 0:
+                    has_progress = True
+                    break
+        
+        if has_progress:
             lessons_data = []
             for lesson_item in LESSONS:
-                prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
+                prog_data = all_progress.get(lesson_item['id'], {})
+                prog_value = prog_data.get('lesson_progress', 0) if prog_data else 0
+                
+                lesson_name = lesson_item['title'].split(' ', 1)[1] if ' ' in lesson_item['title'] else lesson_item['title']
                 lessons_data.append({
-                    'Lesson': lesson_item['title'].split(' ', 1)[1] if ' ' in lesson_item['title'] else lesson_item['title'],
-                    'Progress': prog
+                    'Lesson': lesson_name,
+                    'Progress': prog_value
                 })
             
             lessons_df = pd.DataFrame(lessons_data)
@@ -1292,6 +1318,15 @@ if "dbt_dir" in st.session_state:
             **Schema:** `{user_data['schema']}`  
             **Member Since:** {created_str}
             """)
+        
+        # Debug section (expandable)
+        with st.expander("🔍 Debug: View Raw Progress Data", expanded=False):
+            st.markdown("**Current Lesson Progress:**")
+            st.json(current_progress)
+            
+            st.markdown("**All Lessons Progress:**")
+            all_progress_debug = UserManager.get_all_progress(username)
+            st.json(all_progress_debug if all_progress_debug else {})
 
 # ====================================
 # FOOTER
