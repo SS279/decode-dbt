@@ -15,7 +15,7 @@ import json
 # ====================================
 st.set_page_config(
     page_title="Decode dbt - Learn Data Build Tool", 
-    page_icon="https://cdn.simpleicons.org/dbt/FF694B",  # dbt icon (orange) 
+    page_icon="🦆",  # dbt icon (orange) 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -483,13 +483,13 @@ def create_lesson_card(title, description, icon="📘", progress=0):
 def show_auth_page():
     st.markdown("""
     <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
-        <h1 style="color: #3b82f6; margin: 0 0 0.5rem 0; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-            <img src="https://cdn.simpleicons.org/motherduck/000000" width="40" alt="MotherDuck logo">
+        <h1 style="color: #3b82f6; margin: 0 0 0.5rem 0; display: flex; align-items: center; justify-content: center; gap: 0.6rem;">
+            <img src="https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/motherduck.svg" width="38" alt="MotherDuck">
             Decode dbt
-            <img src="https://cdn.simpleicons.org/dbt/FF694B" width="40" alt="dbt logo">
+            <img src="https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/dbt.svg" width="38" alt="dbt">
         </h1>
         <p style="color: #94a3b8; font-size: 1.1rem; margin: 0;">
-            Learn dbt (data build tool) with Interactive Hands-on Projects
+            Learn dbt (Data Build Tool) with Interactive Hands-on Projects
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -499,7 +499,7 @@ def show_auth_page():
         tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
         
         with tab1:
-            st.markdown('<div class="auth-card">', unsafe_allow_html=True)
+            #st.markdown('<div class="auth-card">', unsafe_allow_html=True)
             with st.form("login_form"):
                 st.markdown("### Welcome Back!")
                 username = st.text_input("Username", key="login_username")
