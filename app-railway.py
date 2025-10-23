@@ -15,7 +15,7 @@ import json
 # ====================================
 st.set_page_config(
     page_title="Decode dbt - Learn Data Build Tool", 
-    page_icon="🦆",  # dbt icon (orange) 
+    page_icon="🦆", 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -138,40 +138,89 @@ class UserManager:
             return {}
 
 # ====================================
-# STORAGE API WRAPPER
+# SIMPLE FILE-BASED STORAGE (Alternative to window.storage)
 # ====================================
-class StorageAPI:
-    @staticmethod
-    async def get(key, shared=False):
-        try:
-            return await window.storage.get(key, shared)
-        except:
-            return None
-    
-    @staticmethod
-    async def set(key, value, shared=False):
-        try:
-            return await window.storage.set(key, value, shared)
-        except:
-            return None
-    
-    @staticmethod
-    async def delete(key, shared=False):
-        try:
-            return await window.storage.delete(key, shared)
-        except:
-            return None
-    
-    @staticmethod
-    async def list(prefix=None, shared=False):
-        try:
-            return await window.storage.list(prefix, shared)
-        except:
-            return None
+import pickle
 
-# Initialize storage API in session state
+class SimpleStorage:
+    """Simple file-based storage for user data and progress"""
+    
+    def __init__(self, storage_dir=".streamlit_storage"):
+        self.storage_dir = storage_dir
+        os.makedirs(storage_dir, exist_ok=True)
+    
+    def _get_filepath(self, key, shared=False):
+        """Generate filepath for a key"""
+        # Use shared or private directory
+        subdir = "shared" if shared else "private"
+        dir_path = os.path.join(self.storage_dir, subdir)
+        os.makedirs(dir_path, exist_ok=True)
+        
+        # Sanitize key for filename
+        safe_key = key.replace(":", "_").replace("/", "_")
+        return os.path.join(dir_path, f"{safe_key}.pkl")
+    
+    def get(self, key, shared=False):
+        """Retrieve a value"""
+        try:
+            filepath = self._get_filepath(key, shared)
+            if os.path.exists(filepath):
+                with open(filepath, 'rb') as f:
+                    data = pickle.load(f)
+                return {'key': key, 'value': data, 'shared': shared}
+            return None
+        except Exception as e:
+            st.error(f"Storage get error: {e}")
+            return None
+    
+    def set(self, key, value, shared=False):
+        """Store a value"""
+        try:
+            filepath = self._get_filepath(key, shared)
+            with open(filepath, 'wb') as f:
+                pickle.dump(value, f)
+            return {'key': key, 'value': value, 'shared': shared}
+        except Exception as e:
+            st.error(f"Storage set error: {e}")
+            return None
+    
+    def delete(self, key, shared=False):
+        """Delete a value"""
+        try:
+            filepath = self._get_filepath(key, shared)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+                return {'key': key, 'deleted': True, 'shared': shared}
+            return None
+        except Exception as e:
+            st.error(f"Storage delete error: {e}")
+            return None
+    
+    def list(self, prefix=None, shared=False):
+        """List keys with optional prefix"""
+        try:
+            subdir = "shared" if shared else "private"
+            dir_path = os.path.join(self.storage_dir, subdir)
+            
+            if not os.path.exists(dir_path):
+                return {'keys': [], 'prefix': prefix, 'shared': shared}
+            
+            all_files = os.listdir(dir_path)
+            # Remove .pkl extension and convert back to key format
+            keys = [f.replace(".pkl", "").replace("_", ":") for f in all_files if f.endswith(".pkl")]
+            
+            # Filter by prefix if provided
+            if prefix:
+                keys = [k for k in keys if k.startswith(prefix)]
+            
+            return {'keys': keys, 'prefix': prefix, 'shared': shared}
+        except Exception as e:
+            st.error(f"Storage list error: {e}")
+            return {'keys': [], 'prefix': prefix, 'shared': shared}
+
+# Initialize storage in session state
 if 'storage_api' not in st.session_state:
-    st.session_state.storage_api = StorageAPI()
+    st.session_state.storage_api = SimpleStorage()
 
 # ====================================
 # CUSTOM THEME & STYLING
@@ -484,9 +533,8 @@ def show_auth_page():
     st.markdown("""
     <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
         <h1 style="color: #3b82f6; margin: 0 0 0.5rem 0; display: flex; align-items: center; justify-content: center; gap: 0.6rem;">
-            <img src="https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/motherduck.svg" width="38" alt="MotherDuck">
             Decode dbt
-            <img src="https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/dbt.svg" width="38" alt="dbt">
+            <img src=""https://cdn.simpleicons.org/dbt/FF694B" width="38" alt="dbt">
         </h1>
         <p style="color: #94a3b8; font-size: 1.1rem; margin: 0;">
             Learn dbt (Data Build Tool) with Interactive Hands-on Projects
@@ -499,7 +547,7 @@ def show_auth_page():
         tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
         
         with tab1:
-            #st.markdown('<div class="auth-card">', unsafe_allow_html=True)
+            st.markdown('<div class="auth-card">', unsafe_allow_html=True)
             with st.form("login_form"):
                 st.markdown("### Welcome Back!")
                 username = st.text_input("Username", key="login_username")
