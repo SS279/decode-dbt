@@ -4,13 +4,17 @@ uvicorn[standard]==0.30.6
 pydantic==2.8.2
 python-dotenv==1.0.1
 
-streamlit
+streamlit==1.28.0
 requests
 
 # === dbt & DuckDB / MotherDuck Integration ===
 dbt-core==1.8.6
 dbt-duckdb==1.8.2
+duckdb==0.9.2
 motherduck
 
 # === Optional: Dev Utils ===
 rich==13.7.1        # pretty logging
+
+pandas==2.1.0
+altair==5.0.1
