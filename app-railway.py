@@ -10,6 +10,41 @@ import altair as alt
 from datetime import datetime
 
 # ====================================
+# VALIDATION
+# ====================================
+st.markdown("## ✅ Lesson Completion")
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    if st.button("🏆 Validate Lesson Completion", use_container_width=True, type="secondary"):
+        ok, result = validate_output(LEARNER_SCHEMA, lesson["validation"])
+        if ok:
+            update_progress(35)
+            st.balloons()
+            st.success(f"""
+            🎉 **Lesson Completed Successfully!**
+            
+            **Achievement:** {lesson['title']}  
+            **Models Built:** {result.get('models_built', 'N/A')}  
+            **Progress:** 100% Complete
+            
+            Well done! You've completed this lesson. 🏆
+            """)
+        else:
+            st.error(f"""
+            ❌ **Lesson Validation Failed**
+            
+            **Details:** {result}
+            
+            Please ensure all required models are executed.
+            """)
+
+with col2:
+    if st.session_state.get("dbt_ran", False):
+        tables = st.session_state.get("tables_list", [])
+        st.metric("Tables Created", len(tables))
+
+# ====================================
 # CUSTOM THEME & STYLING
 # ====================================
 def apply_custom_theme():
@@ -30,7 +65,7 @@ def apply_custom_theme():
     .main .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
-        max-width: 1200px;
+        max-width: 1400px;
     }
     
     /* Headers */
@@ -60,15 +95,6 @@ def apply_custom_theme():
     /* Regular text */
     p, .stMarkdown {
         color: #cbd5e1 !important;
-    }
-    
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-    }
-    
-    [data-testid="stSidebar"] .stMarkdown {
-        color: #cbd5e1;
     }
     
     /* Buttons */
@@ -265,23 +291,6 @@ def create_lesson_card(title, description, icon="📘"):
     </div>
     """, unsafe_allow_html=True)
 
-def create_sidebar_info():
-    with st.sidebar:
-        st.markdown("""
-        <div style="text-align: center; padding: 1.5rem 0 1rem 0;">
-            <h2 style="color: #3b82f6; margin: 0 0 0.25rem 0; font-size: 1.5rem;">🦆 Decode dbt</h2>
-            <p style="color: #94a3b8; font-size: 0.85rem; margin: 0;">Interactive dbt Learning</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # Progress tracking
-        if "lesson_progress" in st.session_state and st.session_state.lesson_progress > 0:
-            st.markdown("**📊 Progress**")
-            st.progress(st.session_state.lesson_progress / 100)
-            st.caption(f"{st.session_state.lesson_progress}% Complete")
-
 # ====================================
 # APP CONFIGURATION
 # ====================================
@@ -289,14 +298,11 @@ st.set_page_config(
     page_title="Decode dbt - Learn Data Build Tool", 
     page_icon="🦆", 
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Apply custom theme
 apply_custom_theme()
-
-# Create sidebar
-create_sidebar_info()
 
 # ====================================
 # HEADER
@@ -470,8 +476,13 @@ def update_progress(increment=10):
 # MAIN APP
 # ====================================
 
-# Learner info
-st.success(f"✅ **Learning Session Active** | Schema: `{LEARNER_SCHEMA}` | Learner: `{st.session_state['learner_id']}`")
+# Learner info with progress
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.success(f"✅ **Learning Session Active** | Schema: `{LEARNER_SCHEMA}` | Learner: `{st.session_state['learner_id']}`")
+with col2:
+    if st.session_state.get("lesson_progress", 0) > 0:
+        st.progress(st.session_state.lesson_progress / 100, text=f"Progress: {st.session_state.lesson_progress}%")
 
 # Lesson Selection
 st.markdown("## 📚 Choose Your Learning Path")
@@ -545,28 +556,44 @@ if "dbt_dir" in st.session_state:
         st.warning("⚠️ No model files found for this lesson.")
         st.stop()
     
-    model_choice = st.selectbox("Choose a model to explore:", model_files)
+    # Store original SQL in session state if not exists
+    if "original_sql" not in st.session_state:
+        st.session_state["original_sql"] = {}
+    
+    model_choice = st.selectbox("Choose a model to explore:", model_files, key="model_selector")
 
     model_path = os.path.join(model_dir, model_choice)
-    sql_code = load_model_sql(model_path)
+    
+    # Load and store original SQL on first load
+    if model_choice not in st.session_state["original_sql"]:
+        st.session_state["original_sql"][model_choice] = load_model_sql(model_path)
+    
+    # Initialize the editor content
+    if f"editor_{model_choice}" not in st.session_state:
+        st.session_state[f"editor_{model_choice}"] = st.session_state["original_sql"][model_choice]
     
     st.markdown("**✏️ Model SQL Editor:**")
     edited_sql = st.text_area(
         "Edit the model SQL below:",
-        value=sql_code, 
+        value=st.session_state[f"editor_{model_choice}"], 
         height=250, 
-        key=model_choice,
+        key=f"textarea_{model_choice}",
         label_visibility="collapsed"
     )
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("💾 Save Model", use_container_width=True):
+        if st.button("💾 Save Model", use_container_width=True, key=f"save_{model_choice}"):
             save_model_sql(model_path, edited_sql)
+            st.session_state[f"editor_{model_choice}"] = edited_sql
             update_progress(5)
             st.success("✅ Model saved successfully!")
     with col2:
-        if st.button("🔄 Reset to Original", use_container_width=True):
+        if st.button("🔄 Reset to Original", use_container_width=True, key=f"reset_{model_choice}"):
+            # Reset to original SQL
+            st.session_state[f"editor_{model_choice}"] = st.session_state["original_sql"][model_choice]
+            save_model_sql(model_path, st.session_state["original_sql"][model_choice])
+            st.success("✅ Model reset to original!")
             st.rerun()
 
 # ====================================
@@ -711,57 +738,49 @@ if st.session_state.get("dbt_ran", False):
 
         # Visualization
         st.markdown("**📈 Data Visualization:**")
-        numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
+        all_columns = df.columns.tolist()
 
-        if len(numeric_cols) >= 1:
+        if len(all_columns) >= 2:
             with st.expander("🎨 Customize Visualization", expanded=True):
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    x_axis = st.selectbox("X-Axis", df.columns.tolist(), key="bi_xaxis")
+                    x_axis = st.selectbox("X-Axis", all_columns, key="bi_xaxis")
                 with col2:
-                    y_axis = st.selectbox("Y-Axis", numeric_cols, key="bi_yaxis")
+                    # Y-axis can now be any column (not just numeric)
+                    y_axis = st.selectbox("Y-Axis", all_columns, key="bi_yaxis")
                 with col3:
-                    chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Area"], key="bi_chart")
+                    chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Area", "Point"], key="bi_chart")
 
-            if chart_type == "Bar":
-                chart = alt.Chart(df).mark_bar().encode(x=x_axis, y=y_axis).properties(height=400)
-            elif chart_type == "Line":
-                chart = alt.Chart(df).mark_line().encode(x=x_axis, y=y_axis).properties(height=400)
-            else:
-                chart = alt.Chart(df).mark_area().encode(x=x_axis, y=y_axis).properties(height=400)
-            
-            st.altair_chart(chart, use_container_width=True)
-
-# ====================================
-# VALIDATION
-# ====================================
-st.markdown("## ✅ Lesson Completion")
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    if st.button("🏆 Validate Lesson Completion", use_container_width=True, type="secondary"):
-        ok, result = validate_output(LEARNER_SCHEMA, lesson["validation"])
-        if ok:
-            update_progress(35)
-            st.balloons()
-            st.success(f"""
-            🎉 **Lesson Completed Successfully!**
-            
-            **Achievement:** {lesson['title']}  
-            **Models Built:** {result.get('models_built', 'N/A')}  
-            **Progress:** 100% Complete
-            
-            Well done! You've completed this lesson. 🏆
-            """)
+            try:
+                if chart_type == "Bar":
+                    chart = alt.Chart(df).mark_bar().encode(
+                        x=alt.X(x_axis, type='nominal' if df[x_axis].dtype == 'object' else 'quantitative'),
+                        y=alt.Y(y_axis, type='nominal' if df[y_axis].dtype == 'object' else 'quantitative'),
+                        tooltip=all_columns
+                    ).properties(height=400)
+                elif chart_type == "Line":
+                    chart = alt.Chart(df).mark_line().encode(
+                        x=alt.X(x_axis, type='nominal' if df[x_axis].dtype == 'object' else 'quantitative'),
+                        y=alt.Y(y_axis, type='nominal' if df[y_axis].dtype == 'object' else 'quantitative'),
+                        tooltip=all_columns
+                    ).properties(height=400)
+                elif chart_type == "Area":
+                    chart = alt.Chart(df).mark_area().encode(
+                        x=alt.X(x_axis, type='nominal' if df[x_axis].dtype == 'object' else 'quantitative'),
+                        y=alt.Y(y_axis, type='nominal' if df[y_axis].dtype == 'object' else 'quantitative'),
+                        tooltip=all_columns
+                    ).properties(height=400)
+                else:  # Point
+                    chart = alt.Chart(df).mark_point().encode(
+                        x=alt.X(x_axis, type='nominal' if df[x_axis].dtype == 'object' else 'quantitative'),
+                        y=alt.Y(y_axis, type='nominal' if df[y_axis].dtype == 'object' else 'quantitative'),
+                        tooltip=all_columns
+                    ).properties(height=400)
+                
+                st.altair_chart(chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Unable to create chart: {e}")
         else:
-            st.error(f"""
-            ❌ **Lesson Validation Failed**
-            
-            **Details:** {result}
-            
-            Please ensure all required models are executed.
-            """)
+            st.info("ℹ️ Need at least 2 columns for visualization")
 
-with col2:
-    if st.session_state.get("lesson_progress", 0) > 0:
-        st.metric("Lesson Progress", f"{st.session_state.lesson_progress}%")
+# ====================================
