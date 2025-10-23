@@ -489,23 +489,26 @@ apply_custom_theme()
 # UI COMPONENTS
 # ====================================
 def create_lesson_card(title, description, icon="📘", progress=0):
-    progress_bar = f"""
-    <div style="
-        width: 100%;
-        height: 6px;
-        background-color: rgba(59, 130, 246, 0.2);
-        border-radius: 3px;
-        margin-top: 0.75rem;
-        overflow: hidden;
-    ">
+    progress_html = ""
+    if progress > 0:
+        progress_html = f"""
         <div style="
-            width: {progress}%;
-            height: 100%;
-            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-            transition: width 0.3s ease;
-        "></div>
-    </div>
-    """ if progress > 0 else ""
+            width: 100%;
+            height: 6px;
+            background-color: rgba(59, 130, 246, 0.2);
+            border-radius: 3px;
+            margin-top: 0.75rem;
+            overflow: hidden;
+        ">
+            <div style="
+                width: {progress}%;
+                height: 100%;
+                background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+                transition: width 0.3s ease;
+            "></div>
+        </div>
+        <p style="color: #60a5fa; margin: 0.5rem 0 0 0; font-size: 0.85rem; font-weight: 600;">Progress: {progress}%</p>
+        """
     
     st.markdown(f"""
     <div style="
@@ -520,7 +523,7 @@ def create_lesson_card(title, description, icon="📘", progress=0):
             <div style="flex: 1;">
                 <h4 style="color: #93c5fd; margin: 0 0 0.5rem 0; font-size: 1.2rem;">{title}</h4>
                 <p style="color: #94a3b8; margin: 0; font-size: 0.95rem;">{description}</p>
-                {progress_bar}
+                {progress_html}
             </div>
         </div>
     </div>
@@ -532,10 +535,7 @@ def create_lesson_card(title, description, icon="📘", progress=0):
 def show_auth_page():
     st.markdown("""
     <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
-        <h1 style="color: #3b82f6; margin: 0 0 0.5rem 0; display: flex; align-items: center; justify-content: center; gap: 0.6rem;">
-            Decode dbt
-            <img src=""https://cdn.simpleicons.org/dbt/FF694B" width="38" alt="dbt">
-        </h1>
+        <h1 style="color: #3b82f6; margin: 0 0 0.5rem 0;">🦆 Decode dbt</h1>
         <p style="color: #94a3b8; font-size: 1.1rem; margin: 0;">
             Learn dbt (Data Build Tool) with Interactive Hands-on Projects
         </p>
@@ -714,27 +714,42 @@ def get_model_files(model_dir):
 
 def update_progress(increment=10, step_name=None):
     """Update learner progress and save to storage"""
-    username = st.session_state['learner_id']
-    lesson_id = st.session_state.get('current_lesson', '')
+    username = st.session_state.get('learner_id')
+    lesson_id = st.session_state.get('current_lesson')
     
-    if not lesson_id:
+    if not username or not lesson_id:
         return
     
     # Get current progress
     progress = UserManager.get_progress(username, lesson_id)
+    if not progress:
+        progress = {
+            'lesson_progress': 0,
+            'completed_steps': [],
+            'models_executed': [],
+            'queries_run': 0,
+            'last_updated': None
+        }
     
     # Update progress
-    progress['lesson_progress'] = min(100, progress['lesson_progress'] + increment)
+    progress['lesson_progress'] = min(100, progress.get('lesson_progress', 0) + increment)
     
-    # Add step if provided
-    if step_name and step_name not in progress['completed_steps']:
-        progress['completed_steps'].append(step_name)
+    # Add step if provided and not already completed
+    if step_name:
+        if 'completed_steps' not in progress:
+            progress['completed_steps'] = []
+        if step_name not in progress['completed_steps']:
+            progress['completed_steps'].append(step_name)
     
     # Save progress
-    UserManager.save_progress(username, lesson_id, progress)
+    success = UserManager.save_progress(username, lesson_id, progress)
     
-    # Update session state
-    st.session_state['lesson_progress'] = progress['lesson_progress']
+    if success:
+        # Update session state to reflect changes immediately
+        st.session_state['lesson_progress'] = progress['lesson_progress']
+        st.session_state[f'progress_{lesson_id}'] = progress
+    
+    return success
 
 # ====================================
 # HEADER WITH USER INFO
@@ -769,13 +784,13 @@ with col3:
 username = st.session_state['learner_id']
 all_progress = UserManager.get_all_progress(username)
 
-if all_progress:
+if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.values()):
     st.markdown("### 📊 Your Learning Progress")
     cols = st.columns(len(LESSONS))
-    for idx, lesson in enumerate(LESSONS):
+    for idx, lesson_item in enumerate(LESSONS):
         with cols[idx]:
-            lesson_prog = all_progress.get(lesson['id'], {}).get('lesson_progress', 0)
-            st.metric(lesson['title'].split()[1], f"{lesson_prog}%")
+            lesson_prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
+            st.metric(lesson_item['title'].split()[1], f"{lesson_prog}%")
 
 # Lesson Selection
 st.markdown("## 📚 Choose Your Learning Path")
@@ -787,15 +802,27 @@ lesson = st.selectbox(
 )
 
 if lesson:
-    # Load lesson progress
+    # Load lesson progress from storage
     current_progress = UserManager.get_progress(username, lesson['id'])
-    st.session_state['lesson_progress'] = current_progress['lesson_progress']
+    if not current_progress:
+        current_progress = {
+            'lesson_progress': 0,
+            'completed_steps': [],
+            'models_executed': [],
+            'queries_run': 0,
+            'last_updated': None
+        }
     
+    # Store in session state
+    st.session_state['lesson_progress'] = current_progress.get('lesson_progress', 0)
+    st.session_state[f'progress_{lesson["id"]}'] = current_progress
+    
+    # Display lesson card with progress
     create_lesson_card(
         lesson["title"], 
         lesson["description"], 
         lesson["title"].split()[0],
-        current_progress['lesson_progress']
+        current_progress.get('lesson_progress', 0)
     )
     
     # Initialize current lesson
@@ -988,16 +1015,31 @@ if "dbt_dir" in st.session_state:
                         with st.expander(f"{status_icon} Model: {model_name}", expanded=False):
                             st.code(run_logs, language="bash")
 
-                # Update progress and track executed models
+                    # Update progress and track executed models
                 current_progress = UserManager.get_progress(username, lesson['id'])
+                if not current_progress:
+                    current_progress = {
+                        'lesson_progress': 0,
+                        'completed_steps': [],
+                        'models_executed': [],
+                        'queries_run': 0,
+                        'last_updated': None
+                    }
+                
                 if 'models_executed' not in current_progress:
                     current_progress['models_executed'] = []
                 
+                # Add newly executed models
                 for model in selected_models:
                     if model not in current_progress['models_executed']:
                         current_progress['models_executed'].append(model)
                 
+                # Save the updated models list first
+                UserManager.save_progress(username, lesson['id'], current_progress)
+                
+                # Then update progress with increment
                 update_progress(30, "models_executed")
+                
                 st.session_state["dbt_ran"] = True
                 st.session_state["tables_list"] = list_tables(LEARNER_SCHEMA)
                 st.success(f"✅ Pipeline execution complete! Executed {len(selected_models)} model(s).")
@@ -1070,7 +1112,18 @@ if "dbt_dir" in st.session_state:
                     
                     # Track queries run
                     current_progress = UserManager.get_progress(username, lesson['id'])
+                    if not current_progress:
+                        current_progress = {
+                            'lesson_progress': 0,
+                            'completed_steps': [],
+                            'models_executed': [],
+                            'queries_run': 0,
+                            'last_updated': None
+                        }
+                    
                     current_progress['queries_run'] = current_progress.get('queries_run', 0) + 1
+                    UserManager.save_progress(username, lesson['id'], current_progress)
+                    
                     update_progress(10, "query_executed")
                     
                     st.success("✅ Query executed successfully!")
@@ -1144,14 +1197,22 @@ if "dbt_dir" in st.session_state:
     with tab3:
         st.markdown("## 📈 Your Learning Journey")
         
-        # Current lesson progress
+        # Reload current lesson progress from storage to get latest data
         current_progress = UserManager.get_progress(username, lesson['id'])
+        if not current_progress:
+            current_progress = {
+                'lesson_progress': 0,
+                'completed_steps': [],
+                'models_executed': [],
+                'queries_run': 0,
+                'last_updated': None
+            }
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Lesson Progress", f"{current_progress['lesson_progress']}%")
+            st.metric("Lesson Progress", f"{current_progress.get('lesson_progress', 0)}%")
         with col2:
-            st.metric("Steps Completed", len(current_progress['completed_steps']))
+            st.metric("Steps Completed", len(current_progress.get('completed_steps', [])))
         with col3:
             st.metric("Models Executed", len(current_progress.get('models_executed', [])))
         with col4:
@@ -1161,7 +1222,7 @@ if "dbt_dir" in st.session_state:
         st.markdown("### 🎯 Lesson Progress")
         progress_df = pd.DataFrame({
             'Metric': ['Overall Progress'],
-            'Percentage': [current_progress['lesson_progress']]
+            'Percentage': [current_progress.get('lesson_progress', 0)]
         })
         
         chart = alt.Chart(progress_df).mark_bar(size=30).encode(
@@ -1173,7 +1234,7 @@ if "dbt_dir" in st.session_state:
         st.altair_chart(chart, use_container_width=True)
         
         # Completed steps
-        if current_progress['completed_steps']:
+        if current_progress.get('completed_steps'):
             st.markdown("### ✅ Completed Steps")
             for step in current_progress['completed_steps']:
                 st.markdown(f"- {step.replace('_', ' ').title()}")
@@ -1182,12 +1243,12 @@ if "dbt_dir" in st.session_state:
         st.markdown("### 📚 All Lessons Overview")
         all_progress = UserManager.get_all_progress(username)
         
-        if all_progress:
+        if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.values()):
             lessons_data = []
             for lesson_item in LESSONS:
                 prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
                 lessons_data.append({
-                    'Lesson': lesson_item['title'].split(' ', 1)[1],
+                    'Lesson': lesson_item['title'].split(' ', 1)[1] if ' ' in lesson_item['title'] else lesson_item['title'],
                     'Progress': prog
                 })
             
@@ -1201,11 +1262,16 @@ if "dbt_dir" in st.session_state:
             ).properties(height=200)
             
             st.altair_chart(chart, use_container_width=True)
+        else:
+            st.info("📚 Start working on lessons to see your progress here!")
         
         # Last updated
         if current_progress.get('last_updated'):
-            last_update = datetime.fromisoformat(current_progress['last_updated'])
-            st.info(f"📅 Last updated: {last_update.strftime('%Y-%m-%d %H:%M:%S')}")
+            try:
+                last_update = datetime.fromisoformat(current_progress['last_updated'])
+                st.info(f"📅 Last updated: {last_update.strftime('%Y-%m-%d %H:%M:%S')}")
+            except:
+                pass
         
         # Account info
         st.markdown("### 👤 Account Information")
@@ -1217,10 +1283,14 @@ if "dbt_dir" in st.session_state:
             **Email:** {user_data['email']}
             """)
         with col2:
-            created = datetime.fromisoformat(user_data['created_at'])
+            try:
+                created = datetime.fromisoformat(user_data['created_at'])
+                created_str = created.strftime('%Y-%m-%d')
+            except:
+                created_str = "N/A"
             st.markdown(f"""
             **Schema:** `{user_data['schema']}`  
-            **Member Since:** {created.strftime('%Y-%m-%d')}
+            **Member Since:** {created_str}
             """)
 
 # ====================================
