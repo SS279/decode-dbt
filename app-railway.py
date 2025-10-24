@@ -1687,7 +1687,7 @@ if "dbt_dir" in st.session_state:
             """)
         
         # Debug section (expandable) - Only show in development
-        if st.secrets.get("DEBUG_MODE", False) or os.environ.get("DEBUG_MODE", "false").lower() == "true":
+        if os.environ.get("DEBUG_MODE", "false").lower() == "true":
             with st.expander("🔍 Debug: View Raw Progress Data", expanded=False):
                 st.markdown("**Storage Backend:**")
                 st.code(f"MotherDuck Database: {MOTHERDUCK_SHARE}", language="text")
