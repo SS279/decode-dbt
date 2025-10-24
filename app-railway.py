@@ -1533,7 +1533,7 @@ with col2:
 # ====================================
 if "dbt_dir" in st.session_state:
     if "dbt_dir" in st.session_state:
-        tab1, tab2, tab3, tab4 = st.tabs([
+        tab1, tab2, tab4 = st.tabs([
             "🧠 Build & Execute Models", 
             "🧪 Query & Visualize Data",
             "📈 Progress Dashboard"
