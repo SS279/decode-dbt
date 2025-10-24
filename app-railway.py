@@ -138,60 +138,187 @@ class UserManager:
             return {}
 
 # ====================================
-# SIMPLE FILE-BASED STORAGE (Alternative to window.storage)
+# MOTHERDUCK STORAGE (Database-backed persistent storage)
 # ====================================
-import pickle
-
-class SimpleStorage:
-    """Simple file-based storage for user data and progress"""
+class MotherDuckStorage:
+    """MotherDuck-backed storage for user data and progress"""
     
-    def __init__(self, storage_dir=".streamlit_storage"):
-        self.storage_dir = storage_dir
-        os.makedirs(storage_dir, exist_ok=True)
+    def __init__(self, motherduck_token, motherduck_share):
+        self.motherduck_token = motherduck_token
+        self.motherduck_share = motherduck_share
+        self._init_tables()
     
-    def _get_filepath(self, key, shared=False):
-        """Generate filepath for a key"""
-        # Use shared or private directory
-        subdir = "shared" if shared else "private"
-        dir_path = os.path.join(self.storage_dir, subdir)
-        os.makedirs(dir_path, exist_ok=True)
-        
-        # Sanitize key for filename
-        safe_key = key.replace(":", "_").replace("/", "_")
-        return os.path.join(dir_path, f"{safe_key}.pkl")
+    def _get_connection(self):
+        """Create a connection to MotherDuck"""
+        return duckdb.connect(f"md:{self.motherduck_share}?motherduck_token={self.motherduck_token}")
+    
+    def _init_tables(self):
+        """Initialize storage tables if they don't exist"""
+        try:
+            con = self._get_connection()
+            
+            # Create users table
+            con.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.users (
+                    username VARCHAR PRIMARY KEY,
+                    password_hash VARCHAR NOT NULL,
+                    email VARCHAR NOT NULL,
+                    schema_name VARCHAR NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create progress table
+            con.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.learner_progress (
+                    username VARCHAR NOT NULL,
+                    lesson_id VARCHAR NOT NULL,
+                    lesson_progress INTEGER DEFAULT 0,
+                    completed_steps JSON,
+                    models_executed JSON,
+                    queries_run INTEGER DEFAULT 0,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (username, lesson_id)
+                )
+            """)
+            
+            con.close()
+        except Exception as e:
+            st.error(f"Error initializing storage tables: {e}")
     
     def get(self, key, shared=False):
         """Retrieve a value"""
         try:
-            filepath = self._get_filepath(key, shared)
-            if os.path.exists(filepath):
-                with open(filepath, 'rb') as f:
-                    data = pickle.load(f)
-                return {'key': key, 'value': data, 'shared': shared}
+            con = self._get_connection()
+            
+            # Parse key to determine table and lookup
+            if key.startswith("user:"):
+                username = key.replace("user:", "")
+                result = con.execute(f"""
+                    SELECT username, password_hash, email, schema_name, created_at::VARCHAR as created_at
+                    FROM {self.motherduck_share}.users
+                    WHERE username = ?
+                """, [username]).fetchone()
+                
+                if result:
+                    data = {
+                        "username": result[0],
+                        "password_hash": result[1],
+                        "email": result[2],
+                        "schema": result[3],
+                        "created_at": result[4]
+                    }
+                    con.close()
+                    return {'key': key, 'value': json.dumps(data), 'shared': shared}
+                
+            elif key.startswith("progress:"):
+                parts = key.replace("progress:", "").split(":")
+                if len(parts) == 2:
+                    username, lesson_id = parts
+                    result = con.execute(f"""
+                        SELECT lesson_progress, completed_steps, models_executed, 
+                               queries_run, last_updated::VARCHAR as last_updated
+                        FROM {self.motherduck_share}.learner_progress
+                        WHERE username = ? AND lesson_id = ?
+                    """, [username, lesson_id]).fetchone()
+                    
+                    if result:
+                        data = {
+                            "lesson_progress": result[0],
+                            "completed_steps": json.loads(result[1]) if result[1] else [],
+                            "models_executed": json.loads(result[2]) if result[2] else [],
+                            "queries_run": result[3],
+                            "last_updated": result[4]
+                        }
+                        con.close()
+                        return {'key': key, 'value': json.dumps(data), 'shared': shared}
+            
+            con.close()
             return None
         except Exception as e:
-            st.error(f"Storage get error: {e}")
+            st.error(f"Storage get error for key '{key}': {e}")
             return None
     
     def set(self, key, value, shared=False):
         """Store a value"""
         try:
-            filepath = self._get_filepath(key, shared)
-            with open(filepath, 'wb') as f:
-                pickle.dump(value, f)
+            con = self._get_connection()
+            
+            # Parse key to determine table and operation
+            if key.startswith("user:"):
+                username = key.replace("user:", "")
+                user_data = json.loads(value)
+                
+                con.execute(f"""
+                    INSERT INTO {self.motherduck_share}.users 
+                        (username, password_hash, email, schema_name, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT (username) DO UPDATE SET
+                        password_hash = EXCLUDED.password_hash,
+                        email = EXCLUDED.email
+                """, [
+                    user_data['username'],
+                    user_data['password_hash'],
+                    user_data['email'],
+                    user_data['schema'],
+                    user_data['created_at']
+                ])
+                
+            elif key.startswith("progress:"):
+                parts = key.replace("progress:", "").split(":")
+                if len(parts) == 2:
+                    username, lesson_id = parts
+                    progress_data = json.loads(value)
+                    
+                    con.execute(f"""
+                        INSERT INTO {self.motherduck_share}.learner_progress 
+                            (username, lesson_id, lesson_progress, completed_steps, 
+                             models_executed, queries_run, last_updated)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (username, lesson_id) DO UPDATE SET
+                            lesson_progress = EXCLUDED.lesson_progress,
+                            completed_steps = EXCLUDED.completed_steps,
+                            models_executed = EXCLUDED.models_executed,
+                            queries_run = EXCLUDED.queries_run,
+                            last_updated = EXCLUDED.last_updated
+                    """, [
+                        username,
+                        lesson_id,
+                        progress_data.get('lesson_progress', 0),
+                        json.dumps(progress_data.get('completed_steps', [])),
+                        json.dumps(progress_data.get('models_executed', [])),
+                        progress_data.get('queries_run', 0),
+                        progress_data.get('last_updated', datetime.now().isoformat())
+                    ])
+            
+            con.close()
             return {'key': key, 'value': value, 'shared': shared}
         except Exception as e:
-            st.error(f"Storage set error: {e}")
+            st.error(f"Storage set error for key '{key}': {e}")
             return None
     
     def delete(self, key, shared=False):
         """Delete a value"""
         try:
-            filepath = self._get_filepath(key, shared)
-            if os.path.exists(filepath):
-                os.remove(filepath)
-                return {'key': key, 'deleted': True, 'shared': shared}
-            return None
+            con = self._get_connection()
+            
+            if key.startswith("user:"):
+                username = key.replace("user:", "")
+                con.execute(f"""
+                    DELETE FROM {self.motherduck_share}.users WHERE username = ?
+                """, [username])
+                
+            elif key.startswith("progress:"):
+                parts = key.replace("progress:", "").split(":")
+                if len(parts) == 2:
+                    username, lesson_id = parts
+                    con.execute(f"""
+                        DELETE FROM {self.motherduck_share}.learner_progress 
+                        WHERE username = ? AND lesson_id = ?
+                    """, [username, lesson_id])
+            
+            con.close()
+            return {'key': key, 'deleted': True, 'shared': shared}
         except Exception as e:
             st.error(f"Storage delete error: {e}")
             return None
@@ -199,20 +326,20 @@ class SimpleStorage:
     def list(self, prefix=None, shared=False):
         """List keys with optional prefix"""
         try:
-            subdir = "shared" if shared else "private"
-            dir_path = os.path.join(self.storage_dir, subdir)
+            con = self._get_connection()
+            keys = []
             
-            if not os.path.exists(dir_path):
-                return {'keys': [], 'prefix': prefix, 'shared': shared}
+            if prefix and prefix.startswith("progress:"):
+                username = prefix.replace("progress:", "").rstrip(":")
+                result = con.execute(f"""
+                    SELECT username, lesson_id
+                    FROM {self.motherduck_share}.learner_progress
+                    WHERE username = ?
+                """, [username]).fetchall()
+                
+                keys = [f"progress:{row[0]}:{row[1]}" for row in result]
             
-            all_files = os.listdir(dir_path)
-            # Remove .pkl extension and convert back to key format
-            keys = [f.replace(".pkl", "").replace("_", ":") for f in all_files if f.endswith(".pkl")]
-            
-            # Filter by prefix if provided
-            if prefix:
-                keys = [k for k in keys if k.startswith(prefix)]
-            
+            con.close()
             return {'keys': keys, 'prefix': prefix, 'shared': shared}
         except Exception as e:
             st.error(f"Storage list error: {e}")
@@ -622,21 +749,8 @@ if 'authenticated' not in st.session_state or not st.session_state['authenticate
     st.stop()
 
 # ====================================
-# ENVIRONMENT CONFIGURATION
+# MAIN APP STARTS HERE (After authentication)
 # ====================================
-MOTHERDUCK_TOKEN = os.environ.get("MOTHERDUCK_TOKEN")
-if not MOTHERDUCK_TOKEN:
-    try:
-        MOTHERDUCK_TOKEN = st.secrets.get("MOTHERDUCK_TOKEN")
-    except:
-        st.error("""
-        🔒 **MotherDuck Token Required**
-        
-        Please set the `MOTHERDUCK_TOKEN` environment variable in your Railway project settings.
-        """)
-        st.stop()
-
-MOTHERDUCK_SHARE = "decode_dbt"
 LEARNER_SCHEMA = st.session_state["learner_schema"]
 
 # ====================================
@@ -877,10 +991,34 @@ decode_dbt:
 
 with col2:
     if st.button("🔄 Reset Session", help="Clear current session and start fresh", use_container_width=True):
-        dbt_dir = st.session_state.get("dbt_dir")
+        # Save user credentials before clearing
+        user_data = st.session_state.get("user_data")
+        learner_id = st.session_state.get("learner_id")
+        learner_schema = st.session_state.get("learner_schema")
+        storage_api = st.session_state.get("storage_api")
+        authenticated = st.session_state.get("authenticated")
+        
+        # Clean up temp directory if exists
+        if "dbt_dir" in st.session_state:
+            dbt_dir = st.session_state["dbt_dir"]
+            if os.path.exists(dbt_dir):
+                try:
+                    shutil.rmtree(dbt_dir)
+                except:
+                    pass
+        
+        # Clear all session state
         for key in list(st.session_state.keys()):
-            if key not in ["authenticated", "user_data", "learner_id", "learner_schema", "storage_api"]:
-                st.session_state.pop(key)
+            st.session_state.pop(key)
+        
+        # Restore user credentials
+        st.session_state["authenticated"] = authenticated
+        st.session_state["user_data"] = user_data
+        st.session_state["learner_id"] = learner_id
+        st.session_state["learner_schema"] = learner_schema
+        st.session_state["storage_api"] = storage_api
+        
+        st.success("✅ Session reset! Environment cleared.")
         st.rerun()
 
 # ====================================
@@ -1319,19 +1457,107 @@ if "dbt_dir" in st.session_state:
             **Member Since:** {created_str}
             """)
         
-        # Debug section (expandable)
-        with st.expander("🔍 Debug: View Raw Progress Data", expanded=False):
-            st.markdown("**Current Lesson Progress:**")
-            st.json(current_progress)
-            
-            st.markdown("**All Lessons Progress:**")
-            all_progress_debug = UserManager.get_all_progress(username)
-            st.json(all_progress_debug if all_progress_debug else {})
+        # Debug section (expandable) - Only show in development
+        if st.secrets.get("DEBUG_MODE", False) or os.environ.get("DEBUG_MODE", "false").lower() == "true":
+            with st.expander("🔍 Debug: View Raw Progress Data", expanded=False):
+                st.markdown("**Storage Location:**")
+                storage_dir = st.session_state.storage_api.storage_dir
+                st.code(f"Data stored in: {os.path.abspath(storage_dir)}", language="bash")
+                
+                st.markdown("**Current Lesson Progress:**")
+                st.json(current_progress)
+                
+                st.markdown("**All Lessons Progress:**")
+                all_progress_debug = UserManager.get_all_progress(username)
+                st.json(all_progress_debug if all_progress_debug else {})
+                
+                st.markdown("**Storage Files:**")
+                try:
+                    private_dir = os.path.join(storage_dir, "private")
+                    if os.path.exists(private_dir):
+                        files = os.listdir(private_dir)
+                        for f in files:
+                            st.code(f"📄 {f}", language="text")
+                except Exception as e:
+                    st.error(f"Error listing files: {e}")
 
 # ====================================
 # FOOTER
 # ====================================
 st.markdown("---")
+
+# Storage info section
+with st.expander("💾 Data Storage Information", expanded=False):
+    st.markdown(f"""
+    ### 🦆 Where Your Data is Stored
+    
+    All user credentials and progress data are stored in **MotherDuck** (cloud DuckDB):
+    
+    **Database:** `{MOTHERDUCK_SHARE}`
+    
+    **Tables:**
+    - `{MOTHERDUCK_SHARE}.users` - User accounts and credentials
+    - `{MOTHERDUCK_SHARE}.learner_progress` - Lesson progress tracking
+    
+    **Benefits:**
+    - ✅ **Persistent**: Survives app deployments and restarts
+    - ✅ **Secure**: Password hashing (SHA-256)
+    - ✅ **Cloud-backed**: Data stored in MotherDuck cloud
+    - ✅ **Accessible**: Query your data directly via MotherDuck console
+    - ✅ **Reliable**: Automatic backups and high availability
+    
+    **Database Schema:**
+    ```sql
+    -- Users table
+    CREATE TABLE {MOTHERDUCK_SHARE}.users (
+        username VARCHAR PRIMARY KEY,
+        password_hash VARCHAR NOT NULL,
+        email VARCHAR NOT NULL,
+        schema_name VARCHAR NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    -- Progress table
+    CREATE TABLE {MOTHERDUCK_SHARE}.learner_progress (
+        username VARCHAR NOT NULL,
+        lesson_id VARCHAR NOT NULL,
+        lesson_progress INTEGER DEFAULT 0,
+        completed_steps JSON,
+        models_executed JSON,
+        queries_run INTEGER DEFAULT 0,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (username, lesson_id)
+    );
+    ```
+    
+    **Access Your Data:**
+    Visit [MotherDuck Console](https://app.motherduck.com/) and query:
+    ```sql
+    SELECT * FROM {MOTHERDUCK_SHARE}.users;
+    SELECT * FROM {MOTHERDUCK_SHARE}.learner_progress;
+    ```
+    """)
+    
+    # Show user stats
+    try:
+        con = st.session_state.storage_api._get_connection()
+        
+        # Count total users
+        user_count = con.execute(f"SELECT COUNT(*) FROM {MOTHERDUCK_SHARE}.users").fetchone()[0]
+        
+        # Count progress records
+        progress_count = con.execute(f"SELECT COUNT(*) FROM {MOTHERDUCK_SHARE}.learner_progress").fetchone()[0]
+        
+        con.close()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Users", user_count)
+        with col2:
+            st.metric("Progress Records", progress_count)
+    except Exception as e:
+        st.warning(f"Unable to fetch stats: {e}")
+
 st.markdown("""
 <div style="text-align: center; color: #64748b; padding: 1rem 0;">
     <p style="margin: 0;">🦆 Decode dbt - Interactive Learning Platform</p>
