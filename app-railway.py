@@ -662,7 +662,7 @@ def apply_custom_theme():
     
     /* Buttons */
     .stButton > button {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%);
         color: white;
         border: none;
         border-radius: 10px;
@@ -670,12 +670,12 @@ def apply_custom_theme():
         font-weight: 600;
         transition: all 0.3s ease;
         width: 100%;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+        box-shadow: 0 2px 8px rgba(147, 197, 253, 0.3);
     }
     
     .stButton > button:hover {
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+        background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+        box-shadow: 0 4px 12px rgba(96, 165, 250, 0.4);
         transform: translateY(-2px);
     }
     
