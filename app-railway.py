@@ -592,7 +592,7 @@ def apply_custom_theme():
     }
     
     .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
     }
     
     /* Main content area */
@@ -604,14 +604,14 @@ def apply_custom_theme():
     
     /* Headers */
     h1 {
-        color: #3b82f6 !important;
+        color: #1e40af !important;
         font-weight: 700 !important;
         font-size: 2.5rem !important;
         margin-bottom: 0.5rem !important;
     }
     
     h2 {
-        color: #60a5fa !important;
+        color: #2563eb !important;
         font-weight: 600 !important;
         font-size: 1.8rem !important;
         margin-top: 2rem !important;
@@ -619,7 +619,7 @@ def apply_custom_theme():
     }
     
     h3 {
-        color: #93c5fd !important;
+        color: #3b82f6 !important;
         font-weight: 600 !important;
         font-size: 1.4rem !important;
         margin-top: 1.5rem !important;
@@ -628,33 +628,36 @@ def apply_custom_theme():
     
     /* Regular text */
     p, .stMarkdown {
-        color: #cbd5e1 !important;
+        color: #475569 !important;
     }
     
     /* Tabs styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: rgba(30, 41, 59, 0.5);
-        border-radius: 8px;
-        padding: 4px;
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 6px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
     
     .stTabs [data-baseweb="tab"] {
         background-color: transparent;
-        border-radius: 6px;
-        color: #94a3b8;
+        border-radius: 8px;
+        color: #64748b;
         font-weight: 500;
-        padding: 8px 16px;
+        padding: 10px 20px;
+        transition: all 0.2s ease;
     }
     
     .stTabs [data-baseweb="tab"]:hover {
-        background-color: rgba(59, 130, 246, 0.1);
-        color: #93c5fd;
+        background-color: #f1f5f9;
+        color: #3b82f6;
     }
     
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white !important;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
     }
     
     /* Buttons */
@@ -662,17 +665,18 @@ def apply_custom_theme():
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white;
         border: none;
-        border-radius: 8px;
-        padding: 0.5rem 1.5rem;
+        border-radius: 10px;
+        padding: 0.6rem 1.75rem;
         font-weight: 600;
         transition: all 0.3s ease;
         width: 100%;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
     }
     
     .stButton > button:hover {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+        transform: translateY(-2px);
     }
     
     .stButton > button:active {
@@ -682,125 +686,161 @@ def apply_custom_theme():
     /* Primary button */
     .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
     }
     
     .stButton > button[kind="primary"]:hover {
         background: linear-gradient(135deg, #059669 0%, #047857 100%);
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
     }
     
     /* Secondary button */
     .stButton > button[kind="secondary"] {
         background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
     }
     
     .stButton > button[kind="secondary"]:hover {
         background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
     }
     
     /* Input fields */
     .stTextInput > div > div > input,
     .stTextArea > div > div > textarea {
-        background-color: #1e293b;
-        border: 1px solid #475569;
-        border-radius: 8px;
-        color: #f1f5f9;
+        background-color: #ffffff;
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        color: #1e293b;
         padding: 0.75rem;
+        transition: all 0.2s ease;
     }
     
     .stTextInput > div > div > input:focus,
     .stTextArea > div > div > textarea:focus {
         border-color: #3b82f6;
-        box-shadow: 0 0 0 1px #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        outline: none;
     }
     
     /* Select boxes */
     .stSelectbox > div > div {
-        background-color: #1e293b;
-        border: 1px solid #475569;
-        border-radius: 8px;
-        color: #f1f5f9;
+        background-color: #ffffff;
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        color: #1e293b;
     }
     
     /* Checkboxes */
     .stCheckbox > label {
-        color: #cbd5e1 !important;
+        color: #475569 !important;
+        font-weight: 500;
     }
     
     /* Dataframes */
     .stDataFrame {
-        border: 1px solid #334155;
-        border-radius: 8px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        background-color: #ffffff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
     
     /* Code blocks */
     .stCodeBlock {
-        border-radius: 8px;
-        border: 1px solid #334155;
+        border-radius: 12px;
+        border: 2px solid #e2e8f0;
+        background-color: #f8fafc;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
     
     /* Expander */
     .streamlit-expanderHeader {
-        background-color: #1e293b;
-        border-radius: 8px;
-        color: #cbd5e1 !important;
-        font-weight: 500;
+        background-color: #ffffff;
+        border-radius: 10px;
+        color: #1e293b !important;
+        font-weight: 600;
+        border: 2px solid #e2e8f0;
+        transition: all 0.2s ease;
+    }
+    
+    .streamlit-expanderHeader:hover {
+        border-color: #3b82f6;
+        background-color: #f8fafc;
     }
     
     .streamlit-expanderContent {
-        background-color: #0f172a;
-        border: 1px solid #334155;
+        background-color: #ffffff;
+        border: 2px solid #e2e8f0;
         border-top: none;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
     }
     
     /* Metrics */
     [data-testid="stMetricValue"] {
-        color: #3b82f6 !important;
+        color: #1e40af !important;
         font-size: 1.8rem !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
     }
     
     [data-testid="stMetricLabel"] {
-        color: #94a3b8 !important;
+        color: #64748b !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+    }
+    
+    [data-testid="stMetric"] {
+        background-color: #ffffff;
+        padding: 1rem;
+        border-radius: 12px;
+        border: 2px solid #e2e8f0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
     
     /* Alert boxes */
     .stAlert {
-        border-radius: 8px;
+        border-radius: 12px;
         border-left: 4px solid;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
     
     /* Success */
     .stSuccess {
-        background-color: rgba(16, 185, 129, 0.1);
+        background-color: #f0fdf4;
         border-left-color: #10b981;
-        color: #6ee7b7 !important;
+        color: #065f46 !important;
     }
     
     /* Info */
     .stInfo {
-        background-color: rgba(59, 130, 246, 0.1);
+        background-color: #eff6ff;
         border-left-color: #3b82f6;
-        color: #93c5fd !important;
+        color: #1e40af !important;
     }
     
     /* Warning */
     .stWarning {
-        background-color: rgba(245, 158, 11, 0.1);
+        background-color: #fffbeb;
         border-left-color: #f59e0b;
-        color: #fcd34d !important;
+        color: #92400e !important;
     }
     
     /* Error */
     .stException {
-        background-color: rgba(239, 68, 68, 0.1);
+        background-color: #fef2f2;
         border-left-color: #ef4444;
-        color: #fca5a5 !important;
+        color: #991b1b !important;
     }
     
     /* Progress bar */
     .stProgress > div > div > div {
         background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        border-radius: 10px;
+    }
+    
+    .stProgress > div > div {
+        background-color: #e2e8f0;
+        border-radius: 10px;
     }
     
     /* Hide Streamlit branding */
@@ -810,30 +850,87 @@ def apply_custom_theme():
     
     /* Scrollbar */
     ::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
+        width: 12px;
+        height: 12px;
     }
     
     ::-webkit-scrollbar-track {
-        background: #0f172a;
+        background: #f1f5f9;
+        border-radius: 10px;
     }
     
     ::-webkit-scrollbar-thumb {
-        background: #475569;
-        border-radius: 5px;
+        background: #cbd5e1;
+        border-radius: 10px;
+        border: 3px solid #f1f5f9;
     }
     
     ::-webkit-scrollbar-thumb:hover {
-        background: #64748b;
+        background: #94a3b8;
     }
     
     /* Login/Register Card */
     .auth-card {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-        border: 1px solid rgba(59, 130, 246, 0.3);
-        border-radius: 12px;
-        padding: 2rem;
+        background: #ffffff;
+        border: 2px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 2.5rem;
         margin: 2rem 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    
+    /* Lesson Cards */
+    div[style*="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1)"] {
+        background: #ffffff !important;
+        border: 2px solid #e2e8f0 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    div[style*="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1)"]:hover {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15) !important;
+        transform: translateY(-2px);
+    }
+    
+    /* Quiz question cards */
+    div[style*="background: rgba(59, 130, 246, 0.05)"] {
+        background: #f8fafc !important;
+        border: 2px solid #e2e8f0 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+    
+    /* Sidebar (if needed) */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        border-right: 2px solid #e2e8f0;
+    }
+    
+    /* Form containers */
+    [data-testid="stForm"] {
+        background: #ffffff;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+    
+    /* Improve overall card aesthetics */
+    .element-container {
+        transition: all 0.2s ease;
+    }
+    
+    /* Better spacing */
+    .row-widget.stButton {
+        padding: 0.25rem 0;
+    }
+    
+    /* Enhanced header section */
+    div[data-testid="column"] > div[style*="text-align: left"] h1 {
+        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
     </style>
     """, unsafe_allow_html=True)
