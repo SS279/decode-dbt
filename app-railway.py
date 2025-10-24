@@ -14,7 +14,7 @@ import json
 # APP CONFIGURATION - MUST BE FIRST
 # ====================================
 st.set_page_config(
-    page_title="Decode dbt - Learn Data Build Tool", 
+    page_title="Decode dbt - Learn data build tool", 
     page_icon="🦆", 
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -908,7 +908,7 @@ def show_auth_page():
     <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
         <h1 style="color: #3b82f6; margin: 0 0 0.5rem 0;">🦆 Decode dbt</h1>
         <p style="color: #94a3b8; font-size: 1.1rem; margin: 0;">
-            Learn dbt (Data Build Tool) with Interactive Hands-on Projects
+            Learn dbt (data build tool) with Interactive Hands-on Projects
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -918,7 +918,7 @@ def show_auth_page():
         tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
         
         with tab1:
-            st.markdown('<div class="auth-card">', unsafe_allow_html=True)
+            #st.markdown('<div class="auth-card">', unsafe_allow_html=True)
             with st.form("login_form"):
                 st.markdown("### Welcome Back!")
                 username = st.text_input("Username", key="login_username")
@@ -942,7 +942,7 @@ def show_auth_page():
             st.markdown('</div>', unsafe_allow_html=True)
         
         with tab2:
-            st.markdown('<div class="auth-card">', unsafe_allow_html=True)
+            #st.markdown('<div class="auth-card">', unsafe_allow_html=True)
             with st.form("register_form"):
                 st.markdown("### Create Your Account")
                 new_username = st.text_input("Username", key="reg_username", 
@@ -1750,6 +1750,191 @@ if "dbt_dir" in st.session_state:
                         st.warning(f"Unable to create chart: {e}")
                 else:
                     st.info("ℹ️ Need at least 2 columns for visualization")
+
+    # ==============================================================================
+    # NEW TAB 3: ANALYTICS QUIZ
+    # ==============================================================================
+    with tab3:
+        st.markdown("## ❓ Test Your Analytics Skills")
+        
+        if not st.session_state.get("dbt_ran", False):
+            st.warning("⚠️ Please execute your dbt models in the **Build & Execute Models** tab first before attempting the quiz.")
+        else:
+            # Get quiz questions for current lesson
+            quiz_questions = lesson.get('quiz', [])
+            
+            if not quiz_questions:
+                st.info("📝 No quiz questions available for this lesson yet.")
+            else:
+                # Get current quiz progress
+                username = st.session_state['learner_id']
+                current_progress = UserManager.get_progress(username, lesson['id'])
+                if not current_progress:
+                    current_progress = {
+                        'lesson_progress': 0,
+                        'completed_steps': [],
+                        'models_executed': [],
+                        'queries_run': 0,
+                        'quiz_answers': {},
+                        'quiz_score': 0,
+                        'last_updated': None
+                    }
+                
+                quiz_answers = current_progress.get('quiz_answers', {})
+                quiz_score = current_progress.get('quiz_score', 0)
+                
+                # Calculate total possible points
+                total_possible_points = sum(q['points'] for q in quiz_questions)
+                questions_answered = len([q for q in quiz_answers.values() if q.get('correct', False)])
+                
+                # Display quiz stats
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Questions Answered", f"{questions_answered}/{len(quiz_questions)}")
+                with col2:
+                    st.metric("Quiz Score", f"{quiz_score}/{total_possible_points}")
+                with col3:
+                    completion_pct = int((questions_answered / len(quiz_questions)) * 100) if quiz_questions else 0
+                    st.metric("Completion", f"{completion_pct}%")
+                with col4:
+                    accuracy = int((quiz_score / total_possible_points) * 100) if total_possible_points > 0 else 0
+                    st.metric("Accuracy", f"{accuracy}%")
+                
+                st.markdown("---")
+                
+                # Display each question
+                for idx, question in enumerate(quiz_questions, 1):
+                    question_id = question['id']
+                    is_answered = question_id in quiz_answers
+                    is_correct = quiz_answers.get(question_id, {}).get('correct', False)
+                    attempts = quiz_answers.get(question_id, {}).get('attempts', 0)
+                    
+                    # Question status icon
+                    if is_correct:
+                        status_icon = "✅"
+                        status_color = "#10b981"
+                    elif is_answered:
+                        status_icon = "❌"
+                        status_color = "#ef4444"
+                    else:
+                        status_icon = "⭕"
+                        status_color = "#94a3b8"
+                    
+                    # Question card
+                    with st.expander(
+                        f"{status_icon} Question {idx}: {question['question']} ({question['points']} points)",
+                        expanded=not is_correct
+                    ):
+                        st.markdown(f"""
+                        <div style="background: rgba(59, 130, 246, 0.05); border-left: 3px solid {status_color}; 
+                                    padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+                            <strong>Question:</strong> {question['question']}<br>
+                            <strong>Points:</strong> {question['points']}<br>
+                            <strong>Hint:</strong> <em>{question['query_hint']}</em>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        if is_correct:
+                            st.success(f"✅ Correct! You earned {question['points']} points. (Attempts: {attempts})")
+                        elif is_answered:
+                            st.warning(f"❌ Not quite right. Attempts: {attempts}. Try again!")
+                        
+                        # SQL Editor for answer
+                        user_query_key = f"quiz_query_{question_id}"
+                        if user_query_key not in st.session_state:
+                            st.session_state[user_query_key] = ""
+                        
+                        user_query = st.text_area(
+                            "Write your SQL query:",
+                            value=st.session_state[user_query_key],
+                            height=150,
+                            key=f"textarea_{question_id}",
+                            disabled=is_correct  # Disable if already answered correctly
+                        )
+                        
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            submit_btn = st.button(
+                                "Submit Answer" if not is_correct else "Already Answered ✓",
+                                key=f"submit_{question_id}",
+                                disabled=is_correct or not user_query.strip(),
+                                use_container_width=True,
+                                type="primary"
+                            )
+                        with col2:
+                            if st.button("Clear", key=f"clear_{question_id}", use_container_width=True):
+                                st.session_state[user_query_key] = ""
+                                st.rerun()
+                        
+                        if submit_btn and not is_correct:
+                            st.session_state[user_query_key] = user_query
+                            
+                            with st.spinner("Checking your answer..."):
+                                is_correct_answer, user_result, expected_result, error_msg = check_quiz_answer(
+                                    user_query,
+                                    question['answer_query'],
+                                    LEARNER_SCHEMA
+                                )
+                            
+                            if error_msg:
+                                st.error(f"❌ {error_msg}")
+                            elif is_correct_answer:
+                                # Save correct answer
+                                save_quiz_progress(
+                                    username,
+                                    lesson['id'],
+                                    question_id,
+                                    True,
+                                    question['points']
+                                )
+                                # Update overall lesson progress
+                                progress_increment = int((question['points'] / total_possible_points) * 30)  # Quiz worth 30% of total
+                                update_progress(progress_increment, f"quiz_{question_id}_correct")
+                                
+                                st.success(f"🎉 Correct! You earned {question['points']} points!")
+                                st.balloons()
+                                
+                                # Show results
+                                st.markdown("**Your Result:**")
+                                st.dataframe(user_result, use_container_width=True)
+                                
+                                st.rerun()
+                            else:
+                                # Save incorrect attempt
+                                save_quiz_progress(
+                                    username,
+                                    lesson['id'],
+                                    question_id,
+                                    False,
+                                    0
+                                )
+                                
+                                st.error("❌ Not quite right. Try again!")
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown("**Your Result:**")
+                                    if user_result is not None:
+                                        st.dataframe(user_result, use_container_width=True)
+                                with col2:
+                                    st.markdown("**Expected Result:**")
+                                    if expected_result is not None:
+                                        st.dataframe(expected_result, use_container_width=True)
+                
+                # Quiz completion check
+                if questions_answered == len(quiz_questions):
+                    st.markdown("---")
+                    st.success(f"""
+                    🎉 **Quiz Completed!**
+                    
+                    You've answered all {len(quiz_questions)} questions!
+                    
+                    **Final Score:** {quiz_score}/{total_possible_points} ({accuracy}%)
+                    """)
+                    
+                    if accuracy == 100:
+                        st.balloons()
+                        st.markdown("### 🏆 Perfect Score! Outstanding work!")
     
     # ==============================================================================
     # TAB 4: PROGRESS DASHBOARD
@@ -1981,7 +2166,7 @@ st.markdown("""
 <div style="text-align: center; color: #64748b; padding: 1rem 0;">
     <p style="margin: 0;">🦆 Decode dbt - Interactive Learning Platform</p>
     <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">
-        Build • Learn • Master dbt
+        Build • Learn • Decode dbt
     </p>
 </div>
 """, unsafe_allow_html=True)
