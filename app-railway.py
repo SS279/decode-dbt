@@ -994,7 +994,37 @@ LESSONS = [
         "validation": {
             "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
             "expected_min": 2
-        }
+        },
+        "quiz": [
+            {
+                "id": "q1",
+                "question": "What is the total revenue generated across all café locations?",
+                "query_hint": "Use the sales or revenue model to sum total revenue",
+                "answer_query": "SELECT SUM(revenue) as total_revenue FROM cafe_chain.sales_summary",
+                "points": 10
+            },
+            {
+                "id": "q2",
+                "question": "Which café location has the highest average transaction value?",
+                "query_hint": "Calculate average transaction value per location",
+                "answer_query": "SELECT location_name, AVG(transaction_amount) as avg_value FROM cafe_chain.sales_summary GROUP BY location_name ORDER BY avg_value DESC LIMIT 1",
+                "points": 15
+            },
+            {
+                "id": "q3",
+                "question": "How many loyalty customers made purchases in the last month?",
+                "query_hint": "Filter customers by loyalty status and recent purchase dates",
+                "answer_query": "SELECT COUNT(DISTINCT customer_id) as loyalty_customers FROM cafe_chain.customer_transactions WHERE is_loyalty_member = true AND transaction_date >= CURRENT_DATE - INTERVAL '30 days'",
+                "points": 15
+            },
+            {
+                "id": "q4",
+                "question": "What is the most popular product category by number of sales?",
+                "query_hint": "Group by product category and count sales",
+                "answer_query": "SELECT product_category, COUNT(*) as sales_count FROM cafe_chain.product_sales GROUP BY product_category ORDER BY sales_count DESC LIMIT 1",
+                "points": 10
+            }
+        ]
     },
     {
         "id": "energy_smart",
@@ -1004,7 +1034,37 @@ LESSONS = [
         "validation": {
             "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
             "expected_min": 2
-        }
+        },
+        "quiz": [
+            {
+                "id": "q1",
+                "question": "What is the total energy consumption (kWh) across all meters?",
+                "query_hint": "Sum the energy consumption from your energy readings model",
+                "answer_query": "SELECT SUM(kwh_consumed) as total_consumption FROM energy_smart.meter_readings",
+                "points": 10
+            },
+            {
+                "id": "q2",
+                "question": "Which hour of the day shows peak energy consumption?",
+                "query_hint": "Group by hour and find the maximum consumption",
+                "answer_query": "SELECT EXTRACT(HOUR FROM reading_timestamp) as hour, SUM(kwh_consumed) as consumption FROM energy_smart.meter_readings GROUP BY hour ORDER BY consumption DESC LIMIT 1",
+                "points": 15
+            },
+            {
+                "id": "q3",
+                "question": "How many unique smart meters are reporting data?",
+                "query_hint": "Count distinct meter IDs",
+                "answer_query": "SELECT COUNT(DISTINCT meter_id) as unique_meters FROM energy_smart.meter_readings",
+                "points": 10
+            },
+            {
+                "id": "q4",
+                "question": "What is the average daily energy consumption per meter?",
+                "query_hint": "Calculate average consumption grouped by meter and day",
+                "answer_query": "SELECT AVG(daily_consumption) as avg_daily FROM (SELECT meter_id, DATE(reading_timestamp) as day, SUM(kwh_consumed) as daily_consumption FROM energy_smart.meter_readings GROUP BY meter_id, day) subquery",
+                "points": 15
+            }
+        ]
     }
 ]
 
@@ -1108,6 +1168,118 @@ def update_progress(increment=10, step_name=None):
         st.session_state[f'progress_{lesson_id}'] = progress
     
     return success
+
+def check_quiz_answer(user_query, expected_answer_query, schema):
+    """
+    Execute both user query and expected answer query and compare results
+    Returns: (is_correct: bool, user_result, expected_result, error_message)
+    """
+    try:
+        con = get_duckdb_connection()
+        con.execute(f"USE {MOTHERDUCK_SHARE}")
+        con.execute(f"SET SCHEMA '{schema}'")
+        
+        # Execute user query
+        try:
+            user_df = con.execute(user_query).fetchdf()
+        except Exception as e:
+            con.close()
+            return False, None, None, f"Query error: {str(e)}"
+        
+        # Execute expected answer query
+        try:
+            expected_df = con.execute(expected_answer_query).fetchdf()
+        except Exception as e:
+            con.close()
+            return False, user_df, None, f"Expected query error: {str(e)}"
+        
+        con.close()
+        
+        # Compare results (normalize for comparison)
+        # Check if shapes match
+        if user_df.shape != expected_df.shape:
+            return False, user_df, expected_df, "Result shape doesn't match expected answer"
+        
+        # Compare values (with some tolerance for floating point)
+        try:
+            # Sort both dataframes by all columns to handle order differences
+            user_sorted = user_df.sort_values(by=list(user_df.columns)).reset_index(drop=True)
+            expected_sorted = expected_df.sort_values(by=list(expected_df.columns)).reset_index(drop=True)
+            
+            # Compare with tolerance for numeric columns
+            import numpy as np
+            matches = True
+            for col in user_sorted.columns:
+                if np.issubdtype(user_sorted[col].dtype, np.number):
+                    if not np.allclose(user_sorted[col], expected_sorted[col], rtol=1e-5, atol=1e-8, equal_nan=True):
+                        matches = False
+                        break
+                else:
+                    if not user_sorted[col].equals(expected_sorted[col]):
+                        matches = False
+                        break
+            
+            if matches:
+                return True, user_df, expected_df, None
+            else:
+                return False, user_df, expected_df, "Results don't match expected answer"
+                
+        except Exception as e:
+            return False, user_df, expected_df, f"Comparison error: {str(e)}"
+            
+    except Exception as e:
+        return False, None, None, f"Database error: {str(e)}"
+
+def save_quiz_progress(username, lesson_id, question_id, is_correct, points_earned):
+    """Save quiz answer progress"""
+    try:
+        # Get current progress
+        progress = UserManager.get_progress(username, lesson_id)
+        if not progress:
+            progress = {
+                'lesson_progress': 0,
+                'completed_steps': [],
+                'models_executed': [],
+                'queries_run': 0,
+                'quiz_answers': {},
+                'quiz_score': 0,
+                'last_updated': None
+            }
+        
+        # Initialize quiz tracking if not exists
+        if 'quiz_answers' not in progress:
+            progress['quiz_answers'] = {}
+        if 'quiz_score' not in progress:
+            progress['quiz_score'] = 0
+        
+        # Update quiz answer
+        if question_id not in progress['quiz_answers']:
+            # First time answering this question
+            progress['quiz_answers'][question_id] = {
+                'correct': is_correct,
+                'points': points_earned if is_correct else 0,
+                'attempts': 1,
+                'answered_at': datetime.now().isoformat()
+            }
+            if is_correct:
+                progress['quiz_score'] += points_earned
+        else:
+            # Already attempted - update attempts
+            progress['quiz_answers'][question_id]['attempts'] += 1
+            if is_correct and not progress['quiz_answers'][question_id]['correct']:
+                # First correct answer after previous incorrect attempts
+                progress['quiz_answers'][question_id]['correct'] = True
+                progress['quiz_answers'][question_id]['points'] = points_earned
+                progress['quiz_answers'][question_id]['answered_at'] = datetime.now().isoformat()
+                progress['quiz_score'] += points_earned
+        
+        # Save progress
+        UserManager.save_progress(username, lesson_id, progress)
+        return True
+        
+    except Exception as e:
+        st.error(f"Error saving quiz progress: {e}")
+        return False
 
 # ====================================
 # HEADER WITH USER INFO
@@ -1254,7 +1426,13 @@ with col2:
 # TABBED INTERFACE
 # ====================================
 if "dbt_dir" in st.session_state:
-    tab1, tab2, tab3 = st.tabs(["🧠 Build & Execute Models", "🧪 Query & Visualize Data", "📈 Progress Dashboard"])
+    if "dbt_dir" in st.session_state:
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "🧠 Build & Execute Models", 
+            "🧪 Query & Visualize Data", 
+            "❓ Analytics Quiz",
+            "📈 Progress Dashboard"
+    ])
     
     # ====================================
     # TAB 1: MODEL BUILDER & EXECUTOR
@@ -1573,13 +1751,13 @@ if "dbt_dir" in st.session_state:
                 else:
                     st.info("ℹ️ Need at least 2 columns for visualization")
     
-    # ====================================
-    # TAB 3: PROGRESS DASHBOARD
-    # ====================================
-    with tab3:
+    # ==============================================================================
+    # TAB 4: PROGRESS DASHBOARD
+    # ==============================================================================
+    with tab4:
         st.markdown("## 📈 Your Learning Journey")
         
-        # Reload current lesson progress from storage to get latest data
+        # Reload current lesson progress
         current_progress = UserManager.get_progress(username, lesson['id'])
         if not current_progress:
             current_progress = {
@@ -1587,10 +1765,19 @@ if "dbt_dir" in st.session_state:
                 'completed_steps': [],
                 'models_executed': [],
                 'queries_run': 0,
+                'quiz_answers': {},
+                'quiz_score': 0,
                 'last_updated': None
             }
         
-        col1, col2, col3, col4 = st.columns(4)
+        # Calculate quiz stats
+        quiz_questions = lesson.get('quiz', [])
+        total_quiz_points = sum(q['points'] for q in quiz_questions) if quiz_questions else 0
+        quiz_score = current_progress.get('quiz_score', 0)
+        quiz_answers = current_progress.get('quiz_answers', {})
+        questions_correct = len([q for q in quiz_answers.values() if q.get('correct', False)])
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             st.metric("Lesson Progress", f"{current_progress.get('lesson_progress', 0)}%")
         with col2:
@@ -1599,6 +1786,8 @@ if "dbt_dir" in st.session_state:
             st.metric("Models Executed", len(current_progress.get('models_executed', [])))
         with col4:
             st.metric("Queries Run", current_progress.get('queries_run', 0))
+        with col5:
+            st.metric("Quiz Score", f"{quiz_score}/{total_quiz_points}")
         
         # Progress visualization
         st.markdown("### 🎯 Lesson Progress")
