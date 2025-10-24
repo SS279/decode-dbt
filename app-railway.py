@@ -655,9 +655,13 @@ def apply_custom_theme():
     }
     
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
         color: white !important;
         box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+    }
+    
+    .stTabs [aria-selected="true"] p {
+        color: white !important;
     }
     
     /* Buttons */
