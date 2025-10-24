@@ -1717,76 +1717,76 @@ WHERE username = '{username}';
 st.markdown("---")
 
 # Storage info section
-with st.expander("💾 Data Storage Information", expanded=False):
-    st.markdown(f"""
-    ### 🦆 Where Your Data is Stored
+# with st.expander("💾 Data Storage Information", expanded=False):
+#     st.markdown(f"""
+#     ### 🦆 Where Your Data is Stored
     
-    All user credentials and progress data are stored in **MotherDuck** (cloud DuckDB):
+#     All user credentials and progress data are stored in **MotherDuck** (cloud DuckDB):
     
-    **Database:** `{MOTHERDUCK_SHARE}`
+#     **Database:** `{MOTHERDUCK_SHARE}`
     
-    **Tables:**
-    - `{MOTHERDUCK_SHARE}.users` - User accounts and credentials
-    - `{MOTHERDUCK_SHARE}.learner_progress` - Lesson progress tracking
+#     **Tables:**
+#     - `{MOTHERDUCK_SHARE}.users` - User accounts and credentials
+#     - `{MOTHERDUCK_SHARE}.learner_progress` - Lesson progress tracking
     
-    **Benefits:**
-    - ✅ **Persistent**: Survives app deployments and restarts
-    - ✅ **Secure**: Password hashing (SHA-256)
-    - ✅ **Cloud-backed**: Data stored in MotherDuck cloud
-    - ✅ **Accessible**: Query your data directly via MotherDuck console
-    - ✅ **Reliable**: Automatic backups and high availability
+#     **Benefits:**
+#     - ✅ **Persistent**: Survives app deployments and restarts
+#     - ✅ **Secure**: Password hashing (SHA-256)
+#     - ✅ **Cloud-backed**: Data stored in MotherDuck cloud
+#     - ✅ **Accessible**: Query your data directly via MotherDuck console
+#     - ✅ **Reliable**: Automatic backups and high availability
     
-    **Database Schema:**
-    ```sql
-    -- Users table
-    CREATE TABLE {MOTHERDUCK_SHARE}.users (
-        username VARCHAR PRIMARY KEY,
-        password_hash VARCHAR NOT NULL,
-        email VARCHAR NOT NULL,
-        schema_name VARCHAR NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+#     **Database Schema:**
+#     ```sql
+#     -- Users table
+#     CREATE TABLE {MOTHERDUCK_SHARE}.users (
+#         username VARCHAR PRIMARY KEY,
+#         password_hash VARCHAR NOT NULL,
+#         email VARCHAR NOT NULL,
+#         schema_name VARCHAR NOT NULL,
+#         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+#     );
     
-    -- Progress table
-    CREATE TABLE {MOTHERDUCK_SHARE}.learner_progress (
-        username VARCHAR NOT NULL,
-        lesson_id VARCHAR NOT NULL,
-        lesson_progress INTEGER DEFAULT 0,
-        completed_steps JSON,
-        models_executed JSON,
-        queries_run INTEGER DEFAULT 0,
-        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (username, lesson_id)
-    );
-    ```
+#     -- Progress table
+#     CREATE TABLE {MOTHERDUCK_SHARE}.learner_progress (
+#         username VARCHAR NOT NULL,
+#         lesson_id VARCHAR NOT NULL,
+#         lesson_progress INTEGER DEFAULT 0,
+#         completed_steps JSON,
+#         models_executed JSON,
+#         queries_run INTEGER DEFAULT 0,
+#         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+#         PRIMARY KEY (username, lesson_id)
+#     );
+#     ```
     
-    **Access Your Data:**
-    Visit [MotherDuck Console](https://app.motherduck.com/) and query:
-    ```sql
-    SELECT * FROM {MOTHERDUCK_SHARE}.users;
-    SELECT * FROM {MOTHERDUCK_SHARE}.learner_progress;
-    ```
-    """)
+#     **Access Your Data:**
+#     Visit [MotherDuck Console](https://app.motherduck.com/) and query:
+#     ```sql
+#     SELECT * FROM {MOTHERDUCK_SHARE}.users;
+#     SELECT * FROM {MOTHERDUCK_SHARE}.learner_progress;
+#     ```
+#     """)
     
-    # Show user stats
-    try:
-        con = st.session_state.storage_api._get_connection()
+#     # Show user stats
+#     try:
+#         con = st.session_state.storage_api._get_connection()
         
-        # Count total users
-        user_count = con.execute(f"SELECT COUNT(*) FROM {MOTHERDUCK_SHARE}.users").fetchone()[0]
+#         # Count total users
+#         user_count = con.execute(f"SELECT COUNT(*) FROM {MOTHERDUCK_SHARE}.users").fetchone()[0]
         
-        # Count progress records
-        progress_count = con.execute(f"SELECT COUNT(*) FROM {MOTHERDUCK_SHARE}.learner_progress").fetchone()[0]
+#         # Count progress records
+#         progress_count = con.execute(f"SELECT COUNT(*) FROM {MOTHERDUCK_SHARE}.learner_progress").fetchone()[0]
         
-        con.close()
+#         con.close()
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Total Users", user_count)
-        with col2:
-            st.metric("Progress Records", progress_count)
-    except Exception as e:
-        st.warning(f"Unable to fetch stats: {e}")
+#         col1, col2 = st.columns(2)
+#         with col1:
+#             st.metric("Total Users", user_count)
+#         with col2:
+#             st.metric("Progress Records", progress_count)
+#     except Exception as e:
+#         st.warning(f"Unable to fetch stats: {e}")
 
 st.markdown("""
 <div style="text-align: center; color: #64748b; padding: 1rem 0;">
