@@ -1115,39 +1115,22 @@ def show_auth_page():
     """, unsafe_allow_html=True)
     
     # Load logo image
-    try:
-        logo_base64 = get_base64_image("assets/website_header_logo.png")
-    except:
-        logo_base64 = None
+    logo_base64 = get_base64_image("assets/website_logo.png")
     
     # Hero section with animated logo
     if logo_base64:
-        logo_html = f'''
-        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
-            <img src="data:image/png;base64,{logo_base64}" style="width: 80px; height: auto;" alt="Decode Data Logo">
-            <h1 style="color: #ffffff; margin: 0; font-size: 2.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">Decode Data</h1>
-        </div>
-        '''
+        logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="width: 220px; height: auto;" alt="Decode dbt Logo">'
     else:
-        # Fallback when logo image is not found
-        logo_html = '''
-        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
-            <div style="font-size: 3.5rem;">🦆</div>
-            <h1 style="color: #ffffff; margin: 0; font-size: 2.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">Decode Data</h1>
-        </div>
-        '''
+        logo_html = '<div style="font-size: 4rem;">🦆</div><h1 style="color: #ffffff; margin: 1rem 0 0 0; font-size: 2.5rem; font-weight: 700;">Decode dbt</h1>'
     
     st.markdown(f"""
     <div class="auth-container" style="text-align: center; padding: 2rem 0 3rem 0;">
         <div class="logo-container">
             {logo_html}
         </div>
-        <h2 style="color: #ffffff; font-size: 1.8rem; font-weight: 600; margin: 1.5rem 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            Master Data Analytics with dbt
-        </h2>
         <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; margin: 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
             From SQL to Insights - Decode Data with dbt!
-        </p>
+        #</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1164,7 +1147,7 @@ def show_auth_page():
     # Auth card with glass morphism
     col1, col2, col3 = st.columns([1, 2.5, 1])
     with col2:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        #st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["🔐 Sign In", "✨ Create Account"])
         
