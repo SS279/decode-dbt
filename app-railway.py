@@ -21,7 +21,7 @@ except:
     page_icon = "🦆"
 
 st.set_page_config(
-    page_title="Decode dbt - Learn data build tool", 
+    page_title="Decode data", 
     page_icon=page_icon, 
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -355,6 +355,19 @@ class MotherDuckStorage:
 # Initialize MotherDuck storage in session state
 if 'storage_api' not in st.session_state:
     st.session_state.storage_api = MotherDuckStorage(MOTHERDUCK_TOKEN, MOTHERDUCK_SHARE)
+
+# ====================================
+# HELPER FUNCTIONS FOR UI
+# ====================================
+def get_base64_image(image_path):
+    """Convert local image to base64 for embedding in HTML"""
+    import base64
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except Exception as e:
+        st.warning(f"Could not load logo image: {e}")
+        return None
 
 # ====================================
 # AUTHENTICATION & USER MANAGEMENT
@@ -937,7 +950,7 @@ def show_auth_page():
     <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
         {logo_html}
         <p style="color: #94a3b8; font-size: 1.1rem; margin: 0;">
-            Learn dbt (data build tool) with Interactive Hands-on Projects
+            From SQL to Insights - Decode Data with dbt!
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1068,19 +1081,6 @@ LESSONS = [
         },
     }
 ]
-
-# ====================================
-# HELPER FUNCTIONS FOR UI
-# ====================================
-def get_base64_image(image_path):
-    """Convert local image to base64 for embedding in HTML"""
-    import base64
-    try:
-        with open(image_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode()
-    except Exception as e:
-        st.warning(f"Could not load logo image: {e}")
-        return None
 
 # ====================================
 # HELPER FUNCTIONS
