@@ -82,6 +82,15 @@ class MotherDuckStorage:
                 )
             """)
             
+            # Create sessions table
+            con.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.user_sessions (
+                    session_token VARCHAR PRIMARY KEY,
+                    session_data JSON NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
             con.close()
         except Exception as e:
             st.error(f"Error initializing storage tables: {e}")
@@ -132,6 +141,20 @@ class MotherDuckStorage:
                         }
                         con.close()
                         return {'key': key, 'value': json.dumps(data), 'shared': shared}
+            
+            elif key.startswith("session:"):
+                session_token = key.replace("session:", "")
+                result = con.execute(f"""
+                    SELECT session_data, created_at::VARCHAR as created_at
+                    FROM {self.motherduck_share}.user_sessions
+                    WHERE session_token = ?
+                """, [session_token]).fetchone()
+                
+                if result:
+                    data = json.loads(result[0])
+                    data['created_at'] = result[1]
+                    con.close()
+                    return {'key': key, 'value': json.dumps(data), 'shared': shared}
             
             con.close()
             return None
@@ -191,6 +214,23 @@ class MotherDuckStorage:
                         progress_data.get('last_updated', datetime.now().isoformat())
                     ])
             
+            elif key.startswith("session:"):
+                session_token = key.replace("session:", "")
+                session_data = json.loads(value)
+                
+                con.execute(f"""
+                    INSERT INTO {self.motherduck_share}.user_sessions 
+                        (session_token, session_data, created_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT (session_token) DO UPDATE SET
+                        session_data = EXCLUDED.session_data,
+                        created_at = EXCLUDED.created_at
+                """, [
+                    session_token,
+                    json.dumps(session_data),
+                    session_data.get('created_at', datetime.now().isoformat())
+                ])
+            
             con.close()
             return {'key': key, 'value': value, 'shared': shared}
         except Exception as e:
@@ -216,6 +256,13 @@ class MotherDuckStorage:
                         DELETE FROM {self.motherduck_share}.learner_progress 
                         WHERE username = ? AND lesson_id = ?
                     """, [username, lesson_id])
+            
+            elif key.startswith("session:"):
+                session_token = key.replace("session:", "")
+                con.execute(f"""
+                    DELETE FROM {self.motherduck_share}.user_sessions 
+                    WHERE session_token = ?
+                """, [session_token])
             
             con.close()
             return {'key': key, 'deleted': True, 'shared': shared}
@@ -302,12 +349,29 @@ class UserManager:
     
     @staticmethod
     def authenticate(username, password):
-        """Authenticate user credentials"""
+        """Authenticate user credentials and create session"""
         user = UserManager.get_user(username)
         if not user:
             return False, "User not found"
         
         if user['password_hash'] == UserManager.hash_password(password):
+            # Create session token
+            session_token = hashlib.sha256(f"{username}{datetime.now().isoformat()}".encode()).hexdigest()
+            
+            # Store session in MotherDuck
+            session_data = {
+                'username': username,
+                'created_at': datetime.now().isoformat()
+            }
+            st.session_state.storage_api.set(
+                f"session:{session_token}",
+                json.dumps(session_data),
+                shared=False
+            )
+            
+            # Set query param for session persistence
+            st.query_params['session'] = session_token
+            
             return True, user
         return False, "Invalid password"
     
@@ -365,218 +429,6 @@ class UserManager:
         except Exception as e:
             st.error(f"Error retrieving all progress: {e}")
             return {}
-
-# ====================================
-# MOTHERDUCK STORAGE (Database-backed persistent storage)
-# ====================================
-class MotherDuckStorage:
-    """MotherDuck-backed storage for user data and progress"""
-    
-    def __init__(self, motherduck_token, motherduck_share):
-        self.motherduck_token = motherduck_token
-        self.motherduck_share = motherduck_share
-        self._init_tables()
-    
-    def _get_connection(self):
-        """Create a connection to MotherDuck"""
-        return duckdb.connect(f"md:{self.motherduck_share}?motherduck_token={self.motherduck_token}")
-    
-    def _init_tables(self):
-        """Initialize storage tables if they don't exist"""
-        try:
-            con = self._get_connection()
-            
-            # Create users table
-            con.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.users (
-                    username VARCHAR PRIMARY KEY,
-                    password_hash VARCHAR NOT NULL,
-                    email VARCHAR NOT NULL,
-                    schema_name VARCHAR NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # Create progress table
-            con.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.learner_progress (
-                    username VARCHAR NOT NULL,
-                    lesson_id VARCHAR NOT NULL,
-                    lesson_progress INTEGER DEFAULT 0,
-                    completed_steps JSON,
-                    models_executed JSON,
-                    queries_run INTEGER DEFAULT 0,
-                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (username, lesson_id)
-                )
-            """)
-            
-            con.close()
-        except Exception as e:
-            st.error(f"Error initializing storage tables: {e}")
-    
-    def get(self, key, shared=False):
-        """Retrieve a value"""
-        try:
-            con = self._get_connection()
-            
-            # Parse key to determine table and lookup
-            if key.startswith("user:"):
-                username = key.replace("user:", "")
-                result = con.execute(f"""
-                    SELECT username, password_hash, email, schema_name, created_at::VARCHAR as created_at
-                    FROM {self.motherduck_share}.users
-                    WHERE username = ?
-                """, [username]).fetchone()
-                
-                if result:
-                    data = {
-                        "username": result[0],
-                        "password_hash": result[1],
-                        "email": result[2],
-                        "schema": result[3],
-                        "created_at": result[4]
-                    }
-                    con.close()
-                    return {'key': key, 'value': json.dumps(data), 'shared': shared}
-                
-            elif key.startswith("progress:"):
-                parts = key.replace("progress:", "").split(":")
-                if len(parts) == 2:
-                    username, lesson_id = parts
-                    result = con.execute(f"""
-                        SELECT lesson_progress, completed_steps, models_executed, 
-                               queries_run, last_updated::VARCHAR as last_updated
-                        FROM {self.motherduck_share}.learner_progress
-                        WHERE username = ? AND lesson_id = ?
-                    """, [username, lesson_id]).fetchone()
-                    
-                    if result:
-                        data = {
-                            "lesson_progress": result[0],
-                            "completed_steps": json.loads(result[1]) if result[1] else [],
-                            "models_executed": json.loads(result[2]) if result[2] else [],
-                            "queries_run": result[3],
-                            "last_updated": result[4]
-                        }
-                        con.close()
-                        return {'key': key, 'value': json.dumps(data), 'shared': shared}
-            
-            con.close()
-            return None
-        except Exception as e:
-            st.error(f"Storage get error for key '{key}': {e}")
-            return None
-    
-    def set(self, key, value, shared=False):
-        """Store a value"""
-        try:
-            con = self._get_connection()
-            
-            # Parse key to determine table and operation
-            if key.startswith("user:"):
-                username = key.replace("user:", "")
-                user_data = json.loads(value)
-                
-                con.execute(f"""
-                    INSERT INTO {self.motherduck_share}.users 
-                        (username, password_hash, email, schema_name, created_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT (username) DO UPDATE SET
-                        password_hash = EXCLUDED.password_hash,
-                        email = EXCLUDED.email
-                """, [
-                    user_data['username'],
-                    user_data['password_hash'],
-                    user_data['email'],
-                    user_data['schema'],
-                    user_data['created_at']
-                ])
-                
-            elif key.startswith("progress:"):
-                parts = key.replace("progress:", "").split(":")
-                if len(parts) == 2:
-                    username, lesson_id = parts
-                    progress_data = json.loads(value)
-                    
-                    con.execute(f"""
-                        INSERT INTO {self.motherduck_share}.learner_progress 
-                            (username, lesson_id, lesson_progress, completed_steps, 
-                             models_executed, queries_run, last_updated)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT (username, lesson_id) DO UPDATE SET
-                            lesson_progress = EXCLUDED.lesson_progress,
-                            completed_steps = EXCLUDED.completed_steps,
-                            models_executed = EXCLUDED.models_executed,
-                            queries_run = EXCLUDED.queries_run,
-                            last_updated = EXCLUDED.last_updated
-                    """, [
-                        username,
-                        lesson_id,
-                        progress_data.get('lesson_progress', 0),
-                        json.dumps(progress_data.get('completed_steps', [])),
-                        json.dumps(progress_data.get('models_executed', [])),
-                        progress_data.get('queries_run', 0),
-                        progress_data.get('last_updated', datetime.now().isoformat())
-                    ])
-            
-            con.close()
-            return {'key': key, 'value': value, 'shared': shared}
-        except Exception as e:
-            st.error(f"Storage set error for key '{key}': {e}")
-            return None
-    
-    def delete(self, key, shared=False):
-        """Delete a value"""
-        try:
-            con = self._get_connection()
-            
-            if key.startswith("user:"):
-                username = key.replace("user:", "")
-                con.execute(f"""
-                    DELETE FROM {self.motherduck_share}.users WHERE username = ?
-                """, [username])
-                
-            elif key.startswith("progress:"):
-                parts = key.replace("progress:", "").split(":")
-                if len(parts) == 2:
-                    username, lesson_id = parts
-                    con.execute(f"""
-                        DELETE FROM {self.motherduck_share}.learner_progress 
-                        WHERE username = ? AND lesson_id = ?
-                    """, [username, lesson_id])
-            
-            con.close()
-            return {'key': key, 'deleted': True, 'shared': shared}
-        except Exception as e:
-            st.error(f"Storage delete error: {e}")
-            return None
-    
-    def list(self, prefix=None, shared=False):
-        """List keys with optional prefix"""
-        try:
-            con = self._get_connection()
-            keys = []
-            
-            if prefix and prefix.startswith("progress:"):
-                username = prefix.replace("progress:", "").rstrip(":")
-                result = con.execute(f"""
-                    SELECT username, lesson_id
-                    FROM {self.motherduck_share}.learner_progress
-                    WHERE username = ?
-                """, [username]).fetchall()
-                
-                keys = [f"progress:{row[0]}:{row[1]}" for row in result]
-            
-            con.close()
-            return {'keys': keys, 'prefix': prefix, 'shared': shared}
-        except Exception as e:
-            st.error(f"Storage list error: {e}")
-            return {'keys': [], 'prefix': prefix, 'shared': shared}
-
-# Initialize storage in session state
-if 'storage_api' not in st.session_state:
-    st.session_state.storage_api = SimpleStorage()
 
 # ====================================
 # CUSTOM THEME & STYLING
@@ -1024,7 +876,6 @@ def show_auth_page():
         tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
         
         with tab1:
-            #st.markdown('<div class="auth-card">', unsafe_allow_html=True)
             with st.form("login_form"):
                 st.markdown("### Welcome Back!")
                 username = st.text_input("Username", key="login_username")
@@ -1045,10 +896,8 @@ def show_auth_page():
                             st.rerun()
                         else:
                             st.error(f"❌ {result}")
-            st.markdown('</div>', unsafe_allow_html=True)
         
         with tab2:
-            #st.markdown('<div class="auth-card">', unsafe_allow_html=True)
             with st.form("register_form"):
                 st.markdown("### Create Your Account")
                 new_username = st.text_input("Username", key="reg_username", 
@@ -1074,12 +923,44 @@ def show_auth_page():
                             st.success(f"✅ {message}! Please login.")
                         else:
                             st.error(f"❌ {message}")
-            st.markdown('</div>', unsafe_allow_html=True)
 
 # ====================================
-# CHECK AUTHENTICATION
+# CHECK AUTHENTICATION WITH SESSION PERSISTENCE
 # ====================================
-if 'authenticated' not in st.session_state or not st.session_state['authenticated']:
+def check_and_restore_session():
+    """Check for existing session and restore if valid"""
+    # If already authenticated in session state, we're good
+    if st.session_state.get('authenticated'):
+        return True
+    
+    # Try to restore from query params (session token)
+    query_params = st.query_params
+    session_token = query_params.get('session')
+    
+    if session_token:
+        # Validate and restore session from storage
+        try:
+            result = st.session_state.storage_api.get(f"session:{session_token}", shared=False)
+            if result and result.get('value'):
+                session_data = json.loads(result['value'])
+                
+                # Check if session is still valid (24 hour expiry)
+                session_created = datetime.fromisoformat(session_data.get('created_at'))
+                if (datetime.now() - session_created).total_seconds() < 86400:  # 24 hours
+                    # Restore session
+                    user_data = UserManager.get_user(session_data['username'])
+                    if user_data:
+                        st.session_state['authenticated'] = True
+                        st.session_state['user_data'] = user_data
+                        st.session_state['learner_id'] = user_data['username']
+                        st.session_state['learner_schema'] = user_data['schema']
+                        return True
+        except Exception as e:
+            pass  # Session restoration failed, proceed to login
+    
+    return False
+
+if not check_and_restore_session():
     show_auth_page()
     st.stop()
 
@@ -1101,36 +982,6 @@ LESSONS = [
             "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
             "expected_min": 2
         },
-        # "quiz": [
-        #     {
-        #         "id": "q1",
-        #         "question": "What is the total revenue generated across all café locations?",
-        #         "query_hint": "Use the sales or revenue model to sum total revenue",
-        #         "answer_query": "SELECT SUM(revenue) as total_revenue FROM cafe_chain.sales_summary",
-        #         "points": 10
-        #     },
-        #     {
-        #         "id": "q2",
-        #         "question": "Which café location has the highest average transaction value?",
-        #         "query_hint": "Calculate average transaction value per location",
-        #         "answer_query": "SELECT location_name, AVG(transaction_amount) as avg_value FROM cafe_chain.sales_summary GROUP BY location_name ORDER BY avg_value DESC LIMIT 1",
-        #         "points": 15
-        #     },
-        #     {
-        #         "id": "q3",
-        #         "question": "How many loyalty customers made purchases in the last month?",
-        #         "query_hint": "Filter customers by loyalty status and recent purchase dates",
-        #         "answer_query": "SELECT COUNT(DISTINCT customer_id) as loyalty_customers FROM cafe_chain.customer_transactions WHERE is_loyalty_member = true AND transaction_date >= CURRENT_DATE - INTERVAL '30 days'",
-        #         "points": 15
-        #     },
-        #     {
-        #         "id": "q4",
-        #         "question": "What is the most popular product category by number of sales?",
-        #         "query_hint": "Group by product category and count sales",
-        #         "answer_query": "SELECT product_category, COUNT(*) as sales_count FROM cafe_chain.product_sales GROUP BY product_category ORDER BY sales_count DESC LIMIT 1",
-        #         "points": 10
-        #     }
-        # ]
     },
     {
         "id": "energy_smart",
@@ -1141,36 +992,6 @@ LESSONS = [
             "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
             "expected_min": 2
         },
-        # "quiz": [
-        #     {
-        #         "id": "q1",
-        #         "question": "What is the total energy consumption (kWh) across all meters?",
-        #         "query_hint": "Sum the energy consumption from your energy readings model",
-        #         "answer_query": "SELECT SUM(kwh_consumed) as total_consumption FROM energy_smart.meter_readings",
-        #         "points": 10
-        #     },
-        #     {
-        #         "id": "q2",
-        #         "question": "Which hour of the day shows peak energy consumption?",
-        #         "query_hint": "Group by hour and find the maximum consumption",
-        #         "answer_query": "SELECT EXTRACT(HOUR FROM reading_timestamp) as hour, SUM(kwh_consumed) as consumption FROM energy_smart.meter_readings GROUP BY hour ORDER BY consumption DESC LIMIT 1",
-        #         "points": 15
-        #     },
-        #     {
-        #         "id": "q3",
-        #         "question": "How many unique smart meters are reporting data?",
-        #         "query_hint": "Count distinct meter IDs",
-        #         "answer_query": "SELECT COUNT(DISTINCT meter_id) as unique_meters FROM energy_smart.meter_readings",
-        #         "points": 10
-        #     },
-        #     {
-        #         "id": "q4",
-        #         "question": "What is the average daily energy consumption per meter?",
-        #         "query_hint": "Calculate average consumption grouped by meter and day",
-        #         "answer_query": "SELECT AVG(daily_consumption) as avg_daily FROM (SELECT meter_id, DATE(reading_timestamp) as day, SUM(kwh_consumed) as daily_consumption FROM energy_smart.meter_readings GROUP BY meter_id, day) subquery",
-        #         "points": 15
-        #     }
-        # ]
     }
 ]
 
@@ -1275,118 +1096,6 @@ def update_progress(increment=10, step_name=None):
     
     return success
 
-# def check_quiz_answer(user_query, expected_answer_query, schema):
-#     """
-#     Execute both user query and expected answer query and compare results
-#     Returns: (is_correct: bool, user_result, expected_result, error_message)
-#     """
-#     try:
-#         con = get_duckdb_connection()
-#         con.execute(f"USE {MOTHERDUCK_SHARE}")
-#         con.execute(f"SET SCHEMA '{schema}'")
-        
-#         # Execute user query
-#         try:
-#             user_df = con.execute(user_query).fetchdf()
-#         except Exception as e:
-#             con.close()
-#             return False, None, None, f"Query error: {str(e)}"
-        
-#         # Execute expected answer query
-#         try:
-#             expected_df = con.execute(expected_answer_query).fetchdf()
-#         except Exception as e:
-#             con.close()
-#             return False, user_df, None, f"Expected query error: {str(e)}"
-        
-#         con.close()
-        
-#         # Compare results (normalize for comparison)
-#         # Check if shapes match
-#         if user_df.shape != expected_df.shape:
-#             return False, user_df, expected_df, "Result shape doesn't match expected answer"
-        
-#         # Compare values (with some tolerance for floating point)
-#         try:
-#             # Sort both dataframes by all columns to handle order differences
-#             user_sorted = user_df.sort_values(by=list(user_df.columns)).reset_index(drop=True)
-#             expected_sorted = expected_df.sort_values(by=list(expected_df.columns)).reset_index(drop=True)
-            
-#             # Compare with tolerance for numeric columns
-#             import numpy as np
-#             matches = True
-#             for col in user_sorted.columns:
-#                 if np.issubdtype(user_sorted[col].dtype, np.number):
-#                     if not np.allclose(user_sorted[col], expected_sorted[col], rtol=1e-5, atol=1e-8, equal_nan=True):
-#                         matches = False
-#                         break
-#                 else:
-#                     if not user_sorted[col].equals(expected_sorted[col]):
-#                         matches = False
-#                         break
-            
-#             if matches:
-#                 return True, user_df, expected_df, None
-#             else:
-#                 return False, user_df, expected_df, "Results don't match expected answer"
-                
-#         except Exception as e:
-#             return False, user_df, expected_df, f"Comparison error: {str(e)}"
-            
-#     except Exception as e:
-#         return False, None, None, f"Database error: {str(e)}"
-
-# def save_quiz_progress(username, lesson_id, question_id, is_correct, points_earned):
-#     """Save quiz answer progress"""
-#     try:
-#         # Get current progress
-#         progress = UserManager.get_progress(username, lesson_id)
-#         if not progress:
-#             progress = {
-#                 'lesson_progress': 0,
-#                 'completed_steps': [],
-#                 'models_executed': [],
-#                 'queries_run': 0,
-#                 'quiz_answers': {},
-#                 'quiz_score': 0,
-#                 'last_updated': None
-#             }
-        
-#         # Initialize quiz tracking if not exists
-#         if 'quiz_answers' not in progress:
-#             progress['quiz_answers'] = {}
-#         if 'quiz_score' not in progress:
-#             progress['quiz_score'] = 0
-        
-#         # Update quiz answer
-#         if question_id not in progress['quiz_answers']:
-#             # First time answering this question
-#             progress['quiz_answers'][question_id] = {
-#                 'correct': is_correct,
-#                 'points': points_earned if is_correct else 0,
-#                 'attempts': 1,
-#                 'answered_at': datetime.now().isoformat()
-#             }
-#             if is_correct:
-#                 progress['quiz_score'] += points_earned
-#         else:
-#             # Already attempted - update attempts
-#             progress['quiz_answers'][question_id]['attempts'] += 1
-#             if is_correct and not progress['quiz_answers'][question_id]['correct']:
-#                 # First correct answer after previous incorrect attempts
-#                 progress['quiz_answers'][question_id]['correct'] = True
-#                 progress['quiz_answers'][question_id]['points'] = points_earned
-#                 progress['quiz_answers'][question_id]['answered_at'] = datetime.now().isoformat()
-#                 progress['quiz_score'] += points_earned
-        
-#         # Save progress
-#         UserManager.save_progress(username, lesson_id, progress)
-#         return True
-        
-#     except Exception as e:
-#         st.error(f"Error saving quiz progress: {e}")
-#         return False
-
 # ====================================
 # HEADER WITH USER INFO
 # ====================================
@@ -1407,6 +1116,17 @@ with col2:
 
 with col3:
     if st.button("🚪 Logout", use_container_width=True):
+        # Clear session token from query params
+        session_token = st.query_params.get('session')
+        if session_token:
+            try:
+                st.session_state.storage_api.delete(f"session:{session_token}", shared=False)
+            except:
+                pass
+        
+        # Clear query params
+        st.query_params.clear()
+        
         # Clear session
         for key in list(st.session_state.keys()):
             st.session_state.pop(key)
@@ -1532,11 +1252,10 @@ with col2:
 # TABBED INTERFACE
 # ====================================
 if "dbt_dir" in st.session_state:
-    if "dbt_dir" in st.session_state:
-        tab1, tab2, tab4 = st.tabs([
-            "🧠 Build & Execute Models", 
-            "🧪 Query & Visualize Data",
-            "📈 Progress Dashboard"
+    tab1, tab2, tab3 = st.tabs([
+        "🧠 Build & Execute Models", 
+        "🧪 Query & Visualize Data",
+        "📈 Progress Dashboard"
     ])
     
     # ====================================
@@ -1856,195 +1575,11 @@ if "dbt_dir" in st.session_state:
                 else:
                     st.info("ℹ️ Need at least 2 columns for visualization")
 
-    # ==============================================================================
-    # NEW TAB 3: ANALYTICS QUIZ
-    # ==============================================================================
-    # with tab3:
-    #     st.markdown("## ❓ Test Your Analytics Skills")
-        
-    #     if not st.session_state.get("dbt_ran", False):
-    #         st.warning("⚠️ Please execute your dbt models in the **Build & Execute Models** tab first before attempting the quiz.")
-    #     else:
-    #         # Get quiz questions for current lesson
-    #         quiz_questions = lesson.get('quiz', [])
-            
-    #         if not quiz_questions:
-    #             st.info("📝 No quiz questions available for this lesson yet.")
-    #         else:
-    #             # Get current quiz progress
-    #             username = st.session_state['learner_id']
-    #             current_progress = UserManager.get_progress(username, lesson['id'])
-    #             if not current_progress:
-    #                 current_progress = {
-    #                     'lesson_progress': 0,
-    #                     'completed_steps': [],
-    #                     'models_executed': [],
-    #                     'queries_run': 0,
-    #                     'quiz_answers': {},
-    #                     'quiz_score': 0,
-    #                     'last_updated': None
-    #                 }
-                
-    #             quiz_answers = current_progress.get('quiz_answers', {})
-    #             quiz_score = current_progress.get('quiz_score', 0)
-                
-    #             # Calculate total possible points
-    #             total_possible_points = sum(q['points'] for q in quiz_questions)
-    #             questions_answered = len([q for q in quiz_answers.values() if q.get('correct', False)])
-                
-    #             # Display quiz stats
-    #             col1, col2, col3, col4 = st.columns(4)
-    #             with col1:
-    #                 st.metric("Questions Answered", f"{questions_answered}/{len(quiz_questions)}")
-    #             with col2:
-    #                 st.metric("Quiz Score", f"{quiz_score}/{total_possible_points}")
-    #             with col3:
-    #                 completion_pct = int((questions_answered / len(quiz_questions)) * 100) if quiz_questions else 0
-    #                 st.metric("Completion", f"{completion_pct}%")
-    #             with col4:
-    #                 accuracy = int((quiz_score / total_possible_points) * 100) if total_possible_points > 0 else 0
-    #                 st.metric("Accuracy", f"{accuracy}%")
-                
-    #             st.markdown("---")
-                
-    #             # Display each question
-    #             for idx, question in enumerate(quiz_questions, 1):
-    #                 question_id = question['id']
-    #                 is_answered = question_id in quiz_answers
-    #                 is_correct = quiz_answers.get(question_id, {}).get('correct', False)
-    #                 attempts = quiz_answers.get(question_id, {}).get('attempts', 0)
-                    
-    #                 # Question status icon
-    #                 if is_correct:
-    #                     status_icon = "✅"
-    #                     status_color = "#10b981"
-    #                 elif is_answered:
-    #                     status_icon = "❌"
-    #                     status_color = "#ef4444"
-    #                 else:
-    #                     status_icon = "⭕"
-    #                     status_color = "#94a3b8"
-                    
-    #                 # Question card
-    #                 with st.expander(
-    #                     f"{status_icon} Question {idx}: {question['question']} ({question['points']} points)",
-    #                     expanded=not is_correct
-    #                 ):
-    #                     st.markdown(f"""
-    #                     <div style="background: rgba(59, 130, 246, 0.05); border-left: 3px solid {status_color}; 
-    #                                 padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
-    #                         <strong>Question:</strong> {question['question']}<br>
-    #                         <strong>Points:</strong> {question['points']}<br>
-    #                         <strong>Hint:</strong> <em>{question['query_hint']}</em>
-    #                     </div>
-    #                     """, unsafe_allow_html=True)
-                        
-    #                     if is_correct:
-    #                         st.success(f"✅ Correct! You earned {question['points']} points. (Attempts: {attempts})")
-    #                     elif is_answered:
-    #                         st.warning(f"❌ Not quite right. Attempts: {attempts}. Try again!")
-                        
-    #                     # SQL Editor for answer
-    #                     user_query_key = f"quiz_query_{question_id}"
-    #                     if user_query_key not in st.session_state:
-    #                         st.session_state[user_query_key] = ""
-                        
-    #                     user_query = st.text_area(
-    #                         "Write your SQL query:",
-    #                         value=st.session_state[user_query_key],
-    #                         height=150,
-    #                         key=f"textarea_{question_id}",
-    #                         disabled=is_correct  # Disable if already answered correctly
-    #                     )
-                        
-    #                     col1, col2 = st.columns([3, 1])
-    #                     with col1:
-    #                         submit_btn = st.button(
-    #                             "Submit Answer" if not is_correct else "Already Answered ✓",
-    #                             key=f"submit_{question_id}",
-    #                             disabled=is_correct or not user_query.strip(),
-    #                             use_container_width=True,
-    #                             type="primary"
-    #                         )
-    #                     with col2:
-    #                         if st.button("Clear", key=f"clear_{question_id}", use_container_width=True):
-    #                             st.session_state[user_query_key] = ""
-    #                             st.rerun()
-                        
-    #                     if submit_btn and not is_correct:
-    #                         st.session_state[user_query_key] = user_query
-                            
-    #                         with st.spinner("Checking your answer..."):
-    #                             is_correct_answer, user_result, expected_result, error_msg = check_quiz_answer(
-    #                                 user_query,
-    #                                 question['answer_query'],
-    #                                 LEARNER_SCHEMA
-    #                             )
-                            
-    #                         if error_msg:
-    #                             st.error(f"❌ {error_msg}")
-    #                         elif is_correct_answer:
-    #                             # Save correct answer
-    #                             save_quiz_progress(
-    #                                 username,
-    #                                 lesson['id'],
-    #                                 question_id,
-    #                                 True,
-    #                                 question['points']
-    #                             )
-    #                             # Update overall lesson progress
-    #                             progress_increment = int((question['points'] / total_possible_points) * 30)  # Quiz worth 30% of total
-    #                             update_progress(progress_increment, f"quiz_{question_id}_correct")
-                                
-    #                             st.success(f"🎉 Correct! You earned {question['points']} points!")
-    #                             st.balloons()
-                                
-    #                             # Show results
-    #                             st.markdown("**Your Result:**")
-    #                             st.dataframe(user_result, use_container_width=True)
-                                
-    #                             st.rerun()
-    #                         else:
-    #                             # Save incorrect attempt
-    #                             save_quiz_progress(
-    #                                 username,
-    #                                 lesson['id'],
-    #                                 question_id,
-    #                                 False,
-    #                                 0
-    #                             )
-                                
-    #                             st.error("❌ Not quite right. Try again!")
-                                
-    #                             col1, col2 = st.columns(2)
-    #                             with col1:
-    #                                 st.markdown("**Your Result:**")
-    #                                 if user_result is not None:
-    #                                     st.dataframe(user_result, use_container_width=True)
-    #                             with col2:
-    #                                 st.markdown("**Expected Result:**")
-    #                                 if expected_result is not None:
-    #                                     st.dataframe(expected_result, use_container_width=True)
-                
-    #             # Quiz completion check
-    #             if questions_answered == len(quiz_questions):
-    #                 st.markdown("---")
-    #                 st.success(f"""
-    #                 🎉 **Quiz Completed!**
-                    
-    #                 You've answered all {len(quiz_questions)} questions!
-                    
-    #                 **Final Score:** {quiz_score}/{total_possible_points} ({accuracy}%)
-    #                 """)
-                    
-    #                 if accuracy == 100:
-    #                     st.balloons()
-    #                     st.markdown("### 🏆 Perfect Score! Outstanding work!")
     
     # ==============================================================================
-    # TAB 4: PROGRESS DASHBOARD
+    # TAB 3: PROGRESS DASHBOARD
     # ==============================================================================
-    with tab4:
+    with tab3:
         st.markdown("## 📈 Your Learning Journey")
         
         # Reload current lesson progress
