@@ -1127,7 +1127,7 @@ def show_auth_page():
         logo_html = f'''
         <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
             <img src="data:image/png;base64,{logo_base64}" style="width: 80px; height: auto;" alt="Decode dbt Logo">
-            <h1 style="color: #ffffff; margin: 0; font-size: 2.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">Decode Data</h1>
+            <h1 style="color: #ffffff; margin: 0; font-size: 2.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">Decode dbt</h1>
         </div>
         '''
     else:
@@ -1135,7 +1135,7 @@ def show_auth_page():
         logo_html = '''
         <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
             <div style="font-size: 3.5rem;">🦆</div>
-            <h1 style="color: #ffffff; margin: 0; font-size: 2.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">Decode Data</h1>
+            <h1 style="color: #ffffff; margin: 0; font-size: 2.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">Decode dbt</h1>
         </div>
         '''
     
