@@ -1115,7 +1115,10 @@ def show_auth_page():
     """, unsafe_allow_html=True)
     
     # Load logo image
-    logo_base64 = get_base64_image("assets/website_header_logo.png")
+    try:
+        logo_base64 = get_base64_image("assets/website_header_logo.png")
+    except:
+        logo_base64 = None
     
     # Hero section with animated logo
     if logo_base64:
@@ -1126,7 +1129,13 @@ def show_auth_page():
         </div>
         '''
     else:
-        logo_html = '<div style="font-size: 4rem;">🦆</div><h1 style="color: #ffffff; margin: 1rem 0 0 0; font-size: 2.5rem; font-weight: 700;">Decode Data</h1>'
+        # Fallback when logo image is not found
+        logo_html = '''
+        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
+            <div style="font-size: 3.5rem;">🦆</div>
+            <h1 style="color: #ffffff; margin: 0; font-size: 2.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">Decode Data</h1>
+        </div>
+        '''
     
     st.markdown(f"""
     <div class="auth-container" style="text-align: center; padding: 2rem 0 3rem 0;">
