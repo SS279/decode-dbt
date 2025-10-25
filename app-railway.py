@@ -937,76 +937,325 @@ def create_lesson_card(title, description, icon="📘", progress=0):
 # ====================================
 # LOGIN/REGISTER INTERFACE
 # ====================================
+# ====================================
+# LOGIN/REGISTER INTERFACE
+# ====================================
 def show_auth_page():
-    # Load logo image
-    logo_base64 = get_base64_image("assets/website_logo.png")  # Change path to your logo
+    # Enhanced CSS for smooth, interactive login page
+    st.markdown("""
+    <style>
+    /* Animated gradient background */
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
     
+    .stApp {
+        background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #4facfe);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
+    }
+    
+    /* Floating animation for logo */
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+    }
+    
+    .logo-container {
+        animation: float 3s ease-in-out infinite;
+    }
+    
+    /* Fade in animation */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .auth-container {
+        animation: fadeInUp 0.6s ease-out;
+    }
+    
+    /* Glass morphism effect for auth card */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        padding: 3rem;
+    }
+    
+    /* Enhanced tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 16px;
+        padding: 4px;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 12px;
+        padding: 12px 24px;
+        font-weight: 600;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        transform: scale(1.02);
+    }
+    
+    /* Enhanced input fields */
+    .stTextInput > div > div > input {
+        background: rgba(255, 255, 255, 0.9);
+        border: 2px solid rgba(102, 126, 234, 0.2);
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 15px;
+        transition: all 0.3s ease;
+    }
+    
+    .stTextInput > div > div > input:hover {
+        border-color: rgba(102, 126, 234, 0.4);
+        background: rgba(255, 255, 255, 1);
+    }
+    
+    .stTextInput > div > div > input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        background: rgba(255, 255, 255, 1);
+        transform: translateY(-2px);
+    }
+    
+    /* Enhanced buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        border: none;
+        border-radius: 12px;
+        padding: 14px 28px;
+        font-weight: 600;
+        font-size: 16px;
+        letter-spacing: 0.5px;
+        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+    }
+    
+    .stButton > button:active {
+        transform: translateY(-1px);
+    }
+    
+    /* Pulse animation for submit buttons */
+    @keyframes pulse {
+        0%, 100% { box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3); }
+        50% { box-shadow: 0 4px 24px rgba(102, 126, 234, 0.5); }
+    }
+    
+    .stButton > button[type="primary"] {
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    /* Feature badges */
+    .feature-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        border-radius: 12px;
+        padding: 8px 16px;
+        margin: 8px 8px 8px 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: #667eea;
+        transition: all 0.3s ease;
+    }
+    
+    .feature-badge:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+    
+    /* Alert styling */
+    .stAlert {
+        border-radius: 12px;
+        border: none;
+        animation: fadeInUp 0.3s ease-out;
+    }
+    
+    /* Form container enhancement */
+    [data-testid="stForm"] {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding: 0;
+    }
+    
+    /* Hide default streamlit elements on auth page */
+    [data-testid="stHeader"] {
+        background: transparent;
+    }
+    
+    /* Tooltip enhancement */
+    .stTextInput > label > div[data-testid="stTooltipIcon"] {
+        color: #667eea;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Load logo image
+    logo_base64 = get_base64_image("assets/website_logo.png")
+    
+    # Hero section with animated logo
     if logo_base64:
-        logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="width: 200px; height: auto; margin-bottom: 1rem;" alt="Decode dbt Logo">'
+        logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="width: 220px; height: auto;" alt="Decode dbt Logo">'
     else:
-        logo_html = '<h1 style="color: #3b82f6; margin: 0 0 0.5rem 0;">🦆 Decode dbt</h1>'
+        logo_html = '<div style="font-size: 4rem;">🦆</div><h1 style="color: #ffffff; margin: 1rem 0 0 0; font-size: 2.5rem; font-weight: 700;">Decode dbt</h1>'
     
     st.markdown(f"""
-    <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
-        {logo_html}
-        <p style="color: #94a3b8; font-size: 1.1rem; margin: 0;">
+    <div class="auth-container" style="text-align: center; padding: 2rem 0 3rem 0;">
+        <div class="logo-container">
+            {logo_html}
+        </div>
+        <h2 style="color: #ffffff; font-size: 1.8rem; font-weight: 600; margin: 1.5rem 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            Master Data Analytics with dbt
+        </h2>
+        <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; margin: 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
             From SQL to Insights - Decode Data with dbt!
         </p>
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # Feature badges
+    st.markdown("""
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <span class="feature-badge">📚 Interactive Lessons</span>
+        <span class="feature-badge">🎯 Real Projects</span>
+        <span class="feature-badge">📊 Live Analytics</span>
+        <span class="feature-badge">🏆 Track Progress</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Auth card with glass morphism
+    col1, col2, col3 = st.columns([1, 2.5, 1])
     with col2:
-        tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["🔐 Sign In", "✨ Create Account"])
         
         with tab1:
-            with st.form("login_form"):
-                st.markdown("### Welcome Back!")
-                username = st.text_input("Username", key="login_username")
-                password = st.text_input("Password", type="password", key="login_password")
-                submit = st.form_submit_button("Login", use_container_width=True, type="primary")
+            st.markdown("""
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h3 style="color: #1e293b; margin: 0 0 0.5rem 0; font-size: 1.6rem; font-weight: 700;">Welcome Back!</h3>
+                <p style="color: #64748b; margin: 0; font-size: 0.95rem;">Sign in to continue your learning journey</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            with st.form("login_form", clear_on_submit=False):
+                username = st.text_input("Username", key="login_username", placeholder="Enter your username")
+                password = st.text_input("Password", type="password", key="login_password", placeholder="Enter your password")
+                
+                st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+                submit = st.form_submit_button("Sign In", use_container_width=True, type="primary")
                 
                 if submit:
                     if not username or not password:
-                        st.error("Please fill in all fields")
+                        st.error("⚠️ Please fill in all fields")
                     else:
-                        success, result = UserManager.authenticate(username, password)
-                        if success:
-                            st.session_state['authenticated'] = True
-                            st.session_state['user_data'] = result
-                            st.session_state['learner_id'] = result['username']
-                            st.session_state['learner_schema'] = result['schema']
-                            st.success("✅ Login successful!")
-                            st.rerun()
-                        else:
-                            st.error(f"❌ {result}")
+                        with st.spinner("🔐 Authenticating..."):
+                            success, result = UserManager.authenticate(username, password)
+                            if success:
+                                st.session_state['authenticated'] = True
+                                st.session_state['user_data'] = result
+                                st.session_state['learner_id'] = result['username']
+                                st.session_state['learner_schema'] = result['schema']
+                                st.success("✅ Login successful! Redirecting...")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {result}")
         
         with tab2:
-            with st.form("register_form"):
-                st.markdown("### Create Your Account")
-                new_username = st.text_input("Username", key="reg_username", 
-                                            help="Choose a unique username")
-                new_email = st.text_input("Email", key="reg_email",
-                                         help="Enter your email address")
-                new_password = st.text_input("Password", type="password", key="reg_password",
-                                            help="Minimum 6 characters")
-                confirm_password = st.text_input("Confirm Password", type="password", 
-                                                key="reg_confirm_password")
+            st.markdown("""
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h3 style="color: #1e293b; margin: 0 0 0.5rem 0; font-size: 1.6rem; font-weight: 700;">Get Started Free</h3>
+                <p style="color: #64748b; margin: 0; font-size: 0.95rem;">Create your account and start learning today</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            with st.form("register_form", clear_on_submit=False):
+                new_username = st.text_input(
+                    "Username", 
+                    key="reg_username", 
+                    help="Choose a unique username",
+                    placeholder="Choose a username"
+                )
+                new_email = st.text_input(
+                    "Email", 
+                    key="reg_email",
+                    help="Enter your email address",
+                    placeholder="your.email@example.com"
+                )
+                new_password = st.text_input(
+                    "Password", 
+                    type="password", 
+                    key="reg_password",
+                    help="Minimum 6 characters",
+                    placeholder="Create a strong password"
+                )
+                confirm_password = st.text_input(
+                    "Confirm Password", 
+                    type="password", 
+                    key="reg_confirm_password",
+                    placeholder="Confirm your password"
+                )
+                
+                st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
                 register = st.form_submit_button("Create Account", use_container_width=True, type="primary")
                 
                 if register:
                     if not all([new_username, new_email, new_password, confirm_password]):
-                        st.error("Please fill in all fields")
+                        st.error("⚠️ Please fill in all fields")
                     elif len(new_password) < 6:
-                        st.error("Password must be at least 6 characters")
+                        st.error("⚠️ Password must be at least 6 characters")
                     elif new_password != confirm_password:
-                        st.error("Passwords do not match")
+                        st.error("⚠️ Passwords do not match")
+                    elif "@" not in new_email or "." not in new_email:
+                        st.error("⚠️ Please enter a valid email address")
                     else:
-                        success, message = UserManager.create_user(new_username, new_password, new_email)
-                        if success:
-                            st.success(f"✅ {message}! Please login.")
-                        else:
-                            st.error(f"❌ {message}")
+                        with st.spinner("✨ Creating your account..."):
+                            success, message = UserManager.create_user(new_username, new_password, new_email)
+                            if success:
+                                st.success(f"🎉 {message}! Please sign in to continue.")
+                            else:
+                                st.error(f"❌ {message}")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Footer
+    st.markdown("""
+    <div style="text-align: center; padding: 2rem 0 1rem 0;">
+        <p style="color: rgba(255, 255, 255, 0.8); font-size: 0.9rem; margin: 0;">
+            🔒 Your data is secure and encrypted
+        </p>
+        <p style="color: rgba(255, 255, 255, 0.6); font-size: 0.85rem; margin: 0.5rem 0 0 0;">
+            Powered by dbt & MotherDuck
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ====================================
 # CHECK AUTHENTICATION WITH SESSION PERSISTENCE
