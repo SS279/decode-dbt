@@ -18,3 +18,4 @@ rich==13.7.1        # pretty logging
 
 pandas==2.1.0
 altair==5.0.1
+Pillow==11.3.0

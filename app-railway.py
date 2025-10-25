@@ -9,13 +9,20 @@ import pandas as pd
 import altair as alt
 from datetime import datetime
 import json
+from PIL import Image
 
 # ====================================
 # APP CONFIGURATION - MUST BE FIRST
 # ====================================
+# Try to load custom page icon
+try:
+    page_icon = Image.open("assets/website_header_logo.png")
+except:
+    page_icon = "🦆"
+
 st.set_page_config(
     page_title="Decode dbt - Learn data build tool", 
-    page_icon="🦆", 
+    page_icon=page_icon, 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -918,9 +925,17 @@ def create_lesson_card(title, description, icon="📘", progress=0):
 # LOGIN/REGISTER INTERFACE
 # ====================================
 def show_auth_page():
-    st.markdown("""
+    # Load logo image
+    logo_base64 = get_base64_image("assets/website_logo.png")  # Change path to your logo
+    
+    if logo_base64:
+        logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="height: 80px; margin-bottom: 1rem;" alt="Decode dbt Logo">'
+    else:
+        logo_html = '<h1 style="color: #3b82f6; margin: 0 0 0.5rem 0;">🦆 Decode dbt</h1>'
+    
+    st.markdown(f"""
     <div style="text-align: center; padding: 1.5rem 0 2rem 0;">
-        <h1 style="color: #3b82f6; margin: 0 0 0.5rem 0;">🦆 Decode dbt</h1>
+        {logo_html}
         <p style="color: #94a3b8; font-size: 1.1rem; margin: 0;">
             Learn dbt (data build tool) with Interactive Hands-on Projects
         </p>
@@ -1053,6 +1068,19 @@ LESSONS = [
         },
     }
 ]
+
+# ====================================
+# HELPER FUNCTIONS FOR UI
+# ====================================
+def get_base64_image(image_path):
+    """Convert local image to base64 for embedding in HTML"""
+    import base64
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except Exception as e:
+        st.warning(f"Could not load logo image: {e}")
+        return None
 
 # ====================================
 # HELPER FUNCTIONS
@@ -1199,6 +1227,10 @@ def update_progress(increment=10, step_name=None):
 # ====================================
 # HEADER WITH USER INFO
 # ====================================
+
+# Load logo image
+logo_base64 = get_base64_image("assets/website_logo.png") 
+
 col1, col2, col3 = st.columns([3, 2, 1])
 with col1:
     st.markdown("""

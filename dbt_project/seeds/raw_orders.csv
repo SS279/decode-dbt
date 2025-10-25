@@ -1,5 +1,0 @@
-order_id,customer_id,order_status,total_amount
-1,101,completed,100
-2,102,completed,200
-3,103,pending,50
-4,104,completed,150
