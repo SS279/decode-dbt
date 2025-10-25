@@ -1130,7 +1130,7 @@ def show_auth_page():
         <div class="logo-container">
             {logo_html}
         </div>
-        <p style="color: #ffffff; font-size: 1.8rem; margin: 1rem 0 0 0; text-shadow: 0 2px 5px rgba(0,0,0,0.4); font-weight: 500; letter-spacing: 0.5px; line-height: 1.4;">
+        <p style="color: #ffffff; font-size: 1.4rem; margin: 1rem 0 0 0; text-shadow: 0 1px 3px rgba(0,0,0,0.4); font-weight: 200; letter-spacing: 0.5px; line-height: 1.4;">
             From SQL to Insights - Decode Data with dbt!
         </p>
     </div>
@@ -1156,7 +1156,7 @@ def show_auth_page():
         with tab1:
             st.markdown("""
             <div style="text-align: center; margin-bottom: 2rem;">
-                <h3 style="color: #1e293b; margin: 0 0 0.5rem 0; font-size: 1.6rem; font-weight: 700;">Welcome Back!</h3>
+                <h3 style="color: #ffffff; margin: 0 0 0.5rem 0; font-size: 1.6rem; font-weight: 700;">Welcome Back!</h3>
                 <p style="color: #64748b; margin: 0; font-size: 0.95rem;">Sign in to continue your learning journey</p>
             </div>
             """, unsafe_allow_html=True)
