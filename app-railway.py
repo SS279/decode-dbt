@@ -369,8 +369,11 @@ class UserManager:
                 shared=False
             )
             
-            # Set query param for session persistence
-            st.query_params['session'] = session_token
+            # Set query param for session persistence (compatible with older Streamlit)
+            try:
+                st.experimental_set_query_params(session=session_token)
+            except:
+                pass  # Fallback if query params not supported
             
             return True, user
         return False, "Invalid password"
@@ -934,8 +937,11 @@ def check_and_restore_session():
         return True
     
     # Try to restore from query params (session token)
-    query_params = st.query_params
-    session_token = query_params.get('session')
+    try:
+        query_params = st.experimental_get_query_params()
+        session_token = query_params.get('session', [None])[0]
+    except:
+        session_token = None
     
     if session_token:
         # Validate and restore session from storage
@@ -1117,15 +1123,19 @@ with col2:
 with col3:
     if st.button("🚪 Logout", use_container_width=True):
         # Clear session token from query params
-        session_token = st.query_params.get('session')
-        if session_token:
-            try:
-                st.session_state.storage_api.delete(f"session:{session_token}", shared=False)
-            except:
-                pass
-        
-        # Clear query params
-        st.query_params.clear()
+        try:
+            query_params = st.experimental_get_query_params()
+            session_token = query_params.get('session', [None])[0]
+            if session_token:
+                try:
+                    st.session_state.storage_api.delete(f"session:{session_token}", shared=False)
+                except:
+                    pass
+            
+            # Clear query params
+            st.experimental_set_query_params()
+        except:
+            pass
         
         # Clear session
         for key in list(st.session_state.keys()):
@@ -1466,6 +1476,7 @@ if "dbt_dir" in st.session_state:
     # ====================================
     # TAB 2: SQL QUERY & VISUALIZATION
     # ====================================
+    
     with tab2:
         if not st.session_state.get("dbt_ran", False):
             st.info("ℹ️ Please execute your dbt models in the **Build & Execute Models** tab first before querying data.")
