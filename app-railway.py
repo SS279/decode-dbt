@@ -949,7 +949,7 @@ def show_auth_page():
     }
     
     .stApp {
-        background: linear-gradient(-45deg, #1e3a8a, #1e40af, #1d4ed8, #2563eb);
+        background: linear-gradient(-45deg, #60a5fa, #3b82f6, #2dd4bf, #38bdf8);
         background-size: 400% 400%;
         animation: gradientShift 15s ease infinite;
     }
@@ -1124,13 +1124,13 @@ def show_auth_page():
         logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="width: 220px; height: auto;" alt="Decode dbt Logo">'
     else:
         logo_html = '<div style="font-size: 4rem;">🦆</div><h1 style="color: #ffffff; margin: 1rem 0 0 0; font-size: 2.5rem; font-weight: 700;">Decode dbt</h1>'
-
+    
     st.markdown(f"""
     <div class="auth-container" style="text-align: center; padding: 2rem 0 3rem 0;">
         <div class="logo-container">
             {logo_html}
         </div>
-        <p style="color: #ffffff; font-size: 1.8rem; margin: 1rem 0 0 0; text-shadow: 0 3px 12px rgba(0,0,0,0.4); font-weight: 700; letter-spacing: 0.5px; line-height: 1.4;">
+        <p style="color: #ffffff; font-size: 1.8rem; margin: 1rem 0 0 0; text-shadow: 0 2px 5px rgba(0,0,0,0.4); font-weight: 500; letter-spacing: 0.5px; line-height: 1.4;">
             From SQL to Insights - Decode Data with dbt!
         </p>
     </div>
