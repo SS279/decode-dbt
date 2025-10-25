@@ -1128,12 +1128,9 @@ def show_auth_page():
         <div class="logo-container">
             {logo_html}
         </div>
-        <h2 style="color: #ffffff; font-size: 1.8rem; font-weight: 600; margin: 1.5rem 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; margin: 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
             From SQL to Insights - Decode Data with dbt!
-        </h2>
-        # <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; margin: 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-            
-        # </p>
+        #</p>
     </div>
     """, unsafe_allow_html=True)
     
