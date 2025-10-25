@@ -1114,12 +1114,6 @@ def show_auth_page():
         color: #667eea;
     }
                 
-    /* Login page specific headings */          
-    .auth-container h3 {
-    color: #ffffff !important;
-    font-weight: 700 !important;
-    font-size: 1.6rem !important;
-    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -1159,11 +1153,11 @@ def show_auth_page():
         #st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["🔐 Sign In", "✨ Create Account"])
-        
+
         with tab1:
             st.markdown("""
             <div style="text-align: center; margin-bottom: 2rem;">
-                <h3 style="margin: 0 0 0.5rem 0;">Welcome Back!</h3>
+                <h3 style="color: #ffffff !important; font-weight: 700 !important; font-size: 1.6rem !important; margin: 0 0 0.5rem 0;">Welcome Back!</h3>
                 <p style="color: #64748b; margin: 0; font-size: 0.95rem;">Sign in to continue your learning journey</p>
             </div>
             """, unsafe_allow_html=True)
@@ -1194,7 +1188,7 @@ def show_auth_page():
         with tab2:
             st.markdown("""
             <div style="text-align: center; margin-bottom: 2rem;">
-                <h3 style="margin: 0 0 0.5rem 0;">Get Started Free</h3>
+                <h3 style="color: #ffffff !important; font-weight: 700 !important; font-size: 1.6rem !important; margin: 0 0 0.5rem 0;">Get Started Free</h3>
                 <p style="color: #64748b; margin: 0; font-size: 0.95rem;">Create your account and start learning today</p>
             </div>
             """, unsafe_allow_html=True)
