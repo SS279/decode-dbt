@@ -933,7 +933,7 @@ def create_lesson_card(title, description, icon="📘", progress=0):
         """
     
     st.markdown(card_html, unsafe_allow_html=True)
-
+    
 # ====================================
 # LOGIN/REGISTER INTERFACE
 # ====================================
@@ -949,7 +949,7 @@ def show_auth_page():
     }
     
     .stApp {
-        background: linear-gradient(-45deg, #667eea, #4facfe, #3b82f6, #60a5fa);
+        background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #4facfe);
         background-size: 400% 400%;
         animation: gradientShift 15s ease infinite;
     }
@@ -1115,7 +1115,7 @@ def show_auth_page():
     """, unsafe_allow_html=True)
     
     # Load logo image
-    logo_base64 = get_base64_image("assets/website_header_logo.png")
+    logo_base64 = get_base64_image("assets/website_logo.png")
     
     # Hero section with animated logo
     if logo_base64:
@@ -1128,8 +1128,11 @@ def show_auth_page():
         <div class="logo-container">
             {logo_html}
         </div>
+        <h2 style="color: #ffffff; font-size: 1.8rem; font-weight: 600; margin: 1.5rem 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            From SQL to Insights
+        </h2>
         <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; margin: 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-            From SQL to Insights - Decode Data with dbt!
+            Decode Data with dbt!
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1147,7 +1150,7 @@ def show_auth_page():
     # Auth card with glass morphism
     col1, col2, col3 = st.columns([1, 2.5, 1])
     with col2:
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        #st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["🔐 Sign In", "✨ Create Account"])
         
