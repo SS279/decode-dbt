@@ -942,7 +942,7 @@ def show_auth_page():
     logo_base64 = get_base64_image("assets/website_logo.png")  # Change path to your logo
     
     if logo_base64:
-        logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="height: 80px; margin-bottom: 1rem;" alt="Decode dbt Logo">'
+        logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="width: 200px; height: auto; margin-bottom: 1rem;" alt="Decode dbt Logo">'
     else:
         logo_html = '<h1 style="color: #3b82f6; margin: 0 0 0.5rem 0;">🦆 Decode dbt</h1>'
     
