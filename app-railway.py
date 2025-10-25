@@ -937,9 +937,6 @@ def create_lesson_card(title, description, icon="📘", progress=0):
 # ====================================
 # LOGIN/REGISTER INTERFACE
 # ====================================
-# ====================================
-# LOGIN/REGISTER INTERFACE
-# ====================================
 def show_auth_page():
     # Enhanced CSS for smooth, interactive login page
     st.markdown("""
@@ -952,7 +949,7 @@ def show_auth_page():
     }
     
     .stApp {
-        background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #4facfe);
+        background: linear-gradient(-45deg, #4facfe, #00f2fe, #43e97b, #38f9d7);
         background-size: 400% 400%;
         animation: gradientShift 15s ease infinite;
     }
@@ -1118,13 +1115,18 @@ def show_auth_page():
     """, unsafe_allow_html=True)
     
     # Load logo image
-    logo_base64 = get_base64_image("assets/website_logo.png")
+    logo_base64 = get_base64_image("assets/website_header_logo.png")
     
     # Hero section with animated logo
     if logo_base64:
-        logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="width: 220px; height: auto;" alt="Decode dbt Logo">'
+        logo_html = f'''
+        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
+            <img src="data:image/png;base64,{logo_base64}" style="width: 80px; height: auto;" alt="Decode Data Logo">
+            <h1 style="color: #ffffff; margin: 0; font-size: 2.8rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">Decode Data</h1>
+        </div>
+        '''
     else:
-        logo_html = '<div style="font-size: 4rem;">🦆</div><h1 style="color: #ffffff; margin: 1rem 0 0 0; font-size: 2.5rem; font-weight: 700;">Decode dbt</h1>'
+        logo_html = '<div style="font-size: 4rem;">🦆</div><h1 style="color: #ffffff; margin: 1rem 0 0 0; font-size: 2.5rem; font-weight: 700;">Decode Data</h1>'
     
     st.markdown(f"""
     <div class="auth-container" style="text-align: center; padding: 2rem 0 3rem 0;">
