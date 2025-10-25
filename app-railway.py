@@ -91,6 +91,18 @@ class MotherDuckStorage:
                 )
             """)
             
+            # Create model_edits table for persisting model changes
+            con.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.model_edits (
+                    username VARCHAR NOT NULL,
+                    lesson_id VARCHAR NOT NULL,
+                    model_name VARCHAR NOT NULL,
+                    model_sql TEXT NOT NULL,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (username, lesson_id, model_name)
+                )
+            """)
+            
             con.close()
         except Exception as e:
             st.error(f"Error initializing storage tables: {e}")
@@ -155,6 +167,25 @@ class MotherDuckStorage:
                     data['created_at'] = result[1]
                     con.close()
                     return {'key': key, 'value': json.dumps(data), 'shared': shared}
+            
+            elif key.startswith("model:"):
+                # Format: model:username:lesson_id:model_name
+                parts = key.replace("model:", "").split(":")
+                if len(parts) == 3:
+                    username, lesson_id, model_name = parts
+                    result = con.execute(f"""
+                        SELECT model_sql, last_updated::VARCHAR as last_updated
+                        FROM {self.motherduck_share}.model_edits
+                        WHERE username = ? AND lesson_id = ? AND model_name = ?
+                    """, [username, lesson_id, model_name]).fetchone()
+                    
+                    if result:
+                        data = {
+                            "model_sql": result[0],
+                            "last_updated": result[1]
+                        }
+                        con.close()
+                        return {'key': key, 'value': json.dumps(data), 'shared': shared}
             
             con.close()
             return None
@@ -230,6 +261,28 @@ class MotherDuckStorage:
                     json.dumps(session_data),
                     session_data.get('created_at', datetime.now().isoformat())
                 ])
+            
+            elif key.startswith("model:"):
+                # Format: model:username:lesson_id:model_name
+                parts = key.replace("model:", "").split(":")
+                if len(parts) == 3:
+                    username, lesson_id, model_name = parts
+                    model_data = json.loads(value)
+                    
+                    con.execute(f"""
+                        INSERT INTO {self.motherduck_share}.model_edits 
+                            (username, lesson_id, model_name, model_sql, last_updated)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT (username, lesson_id, model_name) DO UPDATE SET
+                            model_sql = EXCLUDED.model_sql,
+                            last_updated = EXCLUDED.last_updated
+                    """, [
+                        username,
+                        lesson_id,
+                        model_name,
+                        model_data['model_sql'],
+                        model_data.get('last_updated', datetime.now().isoformat())
+                    ])
             
             con.close()
             return {'key': key, 'value': value, 'shared': shared}
@@ -1050,12 +1103,53 @@ def validate_output(schema, validation):
         return False, {"error": str(e)}
 
 def load_model_sql(model_path):
+    """Load model SQL from file or storage"""
+    username = st.session_state.get('learner_id')
+    lesson_id = st.session_state.get('current_lesson')
+    
+    if username and lesson_id:
+        model_name = os.path.basename(model_path).replace('.sql', '')
+        
+        # Try to load from storage first
+        try:
+            result = st.session_state.storage_api.get(
+                f"model:{username}:{lesson_id}:{model_name}",
+                shared=False
+            )
+            if result and result.get('value'):
+                model_data = json.loads(result['value'])
+                return model_data['model_sql']
+        except:
+            pass
+    
+    # Fallback to file
     return open(model_path).read() if os.path.exists(model_path) else ""
 
 def save_model_sql(model_path, sql):
+    """Save model SQL to both file and storage"""
+    # Save to file
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
     with open(model_path, "w") as f:
         f.write(sql)
+    
+    # Save to storage for persistence
+    username = st.session_state.get('learner_id')
+    lesson_id = st.session_state.get('current_lesson')
+    
+    if username and lesson_id:
+        model_name = os.path.basename(model_path).replace('.sql', '')
+        try:
+            model_data = {
+                'model_sql': sql,
+                'last_updated': datetime.now().isoformat()
+            }
+            st.session_state.storage_api.set(
+                f"model:{username}:{lesson_id}:{model_name}",
+                json.dumps(model_data),
+                shared=False
+            )
+        except Exception as e:
+            st.warning(f"Could not persist model to storage: {e}")
 
 def get_model_files(model_dir):
     """Get all .sql model files in the directory"""
@@ -1221,6 +1315,34 @@ decode_dbt:
                 with open(os.path.join(tmp_dir, "profiles.yml"), "w") as f:
                     f.write(profiles_yml)
                 st.session_state["dbt_dir"] = tmp_dir
+                
+                # Restore any saved model edits from storage
+                username = st.session_state.get('learner_id')
+                lesson_id = lesson['id']
+                model_dir = os.path.join(tmp_dir, lesson["model_dir"])
+                
+                if username and os.path.exists(model_dir):
+                    model_files = get_model_files(model_dir)
+                    restored_count = 0
+                    for model_file in model_files:
+                        model_name = model_file.replace('.sql', '')
+                        try:
+                            result = st.session_state.storage_api.get(
+                                f"model:{username}:{lesson_id}:{model_name}",
+                                shared=False
+                            )
+                            if result and result.get('value'):
+                                model_data = json.loads(result['value'])
+                                model_path = os.path.join(model_dir, model_file)
+                                with open(model_path, "w") as f:
+                                    f.write(model_data['model_sql'])
+                                restored_count += 1
+                        except:
+                            pass
+                    
+                    if restored_count > 0:
+                        st.info(f"♻️ Restored {restored_count} previously saved model(s)")
+                
                 update_progress(20, "sandbox_initialized")
                 st.success(f"✅ Sandbox ready! You can now work on **{lesson['title']}**")
         else:
@@ -1476,7 +1598,7 @@ if "dbt_dir" in st.session_state:
     # ====================================
     # TAB 2: SQL QUERY & VISUALIZATION
     # ====================================
-    
+
     with tab2:
         if not st.session_state.get("dbt_ran", False):
             st.info("ℹ️ Please execute your dbt models in the **Build & Execute Models** tab first before querying data.")
