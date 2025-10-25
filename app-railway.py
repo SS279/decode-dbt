@@ -933,7 +933,7 @@ def create_lesson_card(title, description, icon="📘", progress=0):
         """
     
     st.markdown(card_html, unsafe_allow_html=True)
-    
+
 # ====================================
 # LOGIN/REGISTER INTERFACE
 # ====================================
@@ -949,7 +949,7 @@ def show_auth_page():
     }
     
     .stApp {
-        background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #4facfe);
+        background: linear-gradient(-45deg, #4facfe, #00f2fe, #43e97b, #38f9d7);
         background-size: 400% 400%;
         animation: gradientShift 15s ease infinite;
     }
