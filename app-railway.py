@@ -949,7 +949,7 @@ def show_auth_page():
     }
     
     .stApp {
-        background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #4facfe);
+        background: linear-gradient(-45deg, #3b82f6, #2563eb, #1d4ed8, #1e40af);
         background-size: 400% 400%;
         animation: gradientShift 15s ease infinite;
     }
@@ -1129,11 +1129,11 @@ def show_auth_page():
             {logo_html}
         </div>
         <h2 style="color: #ffffff; font-size: 1.8rem; font-weight: 600; margin: 1.5rem 0 0.5rem 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            From SQL to Insights
+            From SQL to Insights - Decode Data with dbt!
         </h2>
-        <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; margin: 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-            Decode Data with dbt!
-        </p>
+        # <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; margin: 0; text-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+            
+        # </p>
     </div>
     """, unsafe_allow_html=True)
     
