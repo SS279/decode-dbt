@@ -1605,7 +1605,7 @@ if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.va
             st.metric(lesson_item['title'].split()[1], f"{lesson_prog}%")
 
 # Lesson Selection
-st.markdown("## 📚 Choose Your Learning Path")
+st.markdown("### 📚 Choose Your Learning Path")
 lesson = st.selectbox(
     "Select a lesson to begin:",
     LESSONS, 
@@ -1644,7 +1644,7 @@ if lesson:
 # ====================================
 # SANDBOX SETUP
 # ====================================
-st.markdown("## 🚀 Setup Your Learning Environment")
+st.markdown("### 🚀 Setup Your Learning Environment")
 col1, col2 = st.columns([3, 1])
 
 with col1:
@@ -1746,7 +1746,7 @@ if "dbt_dir" in st.session_state:
     # TAB 1: MODEL BUILDER & EXECUTOR
     # ====================================
     with tab1:
-        st.markdown("## 🧠 Explore & Edit Data Models")
+        st.markdown("### 🧠 Explore & Edit Data Models")
         
         model_dir = os.path.join(st.session_state["dbt_dir"], lesson["model_dir"])
         if not os.path.exists(model_dir):
@@ -1802,7 +1802,7 @@ if "dbt_dir" in st.session_state:
         # ====================================
         # RUN SEEDS AND MODELS
         # ====================================
-        st.markdown("## 🏃 Execute Your Data Pipeline")
+        st.markdown("### 🏃 Execute Your Data Pipeline")
         
         st.markdown("**📋 Select Models to Execute:**")
         
@@ -1915,7 +1915,7 @@ if "dbt_dir" in st.session_state:
         # ====================================
         # VALIDATION
         # ====================================
-        st.markdown("## ✅ Lesson Completion")
+        st.markdown("### ✅ Lesson Completion")
         col1, col2 = st.columns([3, 1])
 
         with col1:
@@ -1955,7 +1955,7 @@ if "dbt_dir" in st.session_state:
         if not st.session_state.get("dbt_ran", False):
             st.info("ℹ️ Please execute your dbt models in the **Build & Execute Models** tab first before querying data.")
         else:
-            st.markdown("## 🧪 Data Exploration & Analysis")
+            st.markdown("### 🧪 Data Exploration & Analysis")
             
             if "sql_query" not in st.session_state:
                 st.session_state["sql_query"] = f"SELECT * FROM information_schema.tables WHERE table_schema = '{LEARNER_SCHEMA}' LIMIT 5;"
@@ -2065,7 +2065,7 @@ if "dbt_dir" in st.session_state:
     # TAB 3: PROGRESS DASHBOARD
     # ==============================================================================
     with tab3:
-        st.markdown("## 📈 Your Learning Journey")
+        st.markdown("### 📈 Your Learning Journey")
         
         # Reload current lesson progress
         current_progress = UserManager.get_progress(username, lesson['id'])
