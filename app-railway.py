@@ -2289,7 +2289,7 @@ st.markdown("---")
 
 st.markdown("""
 <div style="text-align: center; color: #64748b; padding: 1rem 0;">
-    <p style="margin: 0;">🦆 Decode dbt - Interactive Learning Platform</p>
+    <p style="margin: 0;">Decode data - Interactive Learning Platform</p>
     <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">
         Build • Learn • Decode dbt
     </p>
