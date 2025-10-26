@@ -1524,15 +1524,15 @@ def update_progress(increment=10, step_name=None):
 # HEADER WITH USER INFO
 # ====================================
 
-# Load logo image
-logo_base64 = get_base64_image("assets/website_logo.png") 
-
 col1, col2, col3 = st.columns([3, 2, 1])
 with col1:
     # Load header logo image
     logo_header_base64 = get_base64_image("assets/website_header_logo.png")
 
-    header_logo_html = f'<img src="data:image/png;base64,{logo_header_base64}" style="width: 50px; height: auto; vertical-align: middle;" alt="Decode Data Logo">'
+    if logo_header_base64:
+        header_logo_html = f'<img src="data:image/png;base64,{logo_header_base64}" style="width: 50px; height: auto; vertical-align: middle;" alt="Decode Data Logo">'
+    else:
+        header_logo_html = '<span style="font-size: 2rem; vertical-align: middle;">🦆</span>'
 
     st.markdown(f"""
     <div style="text-align: left;">
