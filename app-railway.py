@@ -1165,37 +1165,31 @@ def show_auth_page():
     
     # Load logo image
     logo_base64 = get_base64_image("assets/website_logo.png")
-    # Load logo images
+    # Load header logo images
     logo_header_base64 = get_base64_image("assets/website_header_logo.png")
 
     # Hero section with animated logo
     if logo_header_base64:
         logo_html = f'''<div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
             <img src="data:image/png;base64,{logo_header_base64}" style="width: 80px; height: auto;" alt="Decode Data Logo">
-            <h1 style="
-                background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
+            <div style="
+                color: #1e40af;
                 margin: 0;
                 font-size: 3rem;
                 font-weight: 700;
                 letter-spacing: -0.5px;
-            ">Decode Data</h1>
+            ">Decode Data</div>
         </div>'''
     else:
         logo_html = '''<div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
             <div style="font-size: 3.5rem;">🦆</div>
-            <h1 style="
-                background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
+            <div style="
+                color: #1e40af;
                 margin: 0;
                 font-size: 3rem;
                 font-weight: 700;
                 letter-spacing: -0.5px;
-            ">Decode Data</h1>
+            ">Decode Data</div>
         </div>'''
     
     st.markdown(f"""
