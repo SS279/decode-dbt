@@ -941,17 +941,18 @@ def show_auth_page():
     # Enhanced CSS for smooth, interactive login page
     st.markdown("""
     <style>
-    /* Animated gradient background */
+    /* Animated gradient background - IMPORTANT: Higher specificity */
+    div[data-testid="stAppViewContainer"] > .main,
+    .stApp {
+        background: linear-gradient(-45deg, #0a192f, #112240, #1a365d, #0d9488) !important;
+        background-size: 400% 400% !important;
+        animation: gradientShift 15s ease infinite !important;
+    }
+    
     @keyframes gradientShift {
         0% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
         100% { background-position: 0% 50%; }
-    }
-    
-    .stApp {
-        background: linear-gradient(-45deg, #60a5fa, #3b82f6, #2dd4bf, #38bdf8);
-        background-size: 400% 400%;
-        animation: gradientShift 15s ease infinite;
     }
     
     /* Floating animation for logo */
@@ -980,6 +981,30 @@ def show_auth_page():
         animation: fadeInUp 0.6s ease-out;
     }
     
+    /* Override any conflicting h3 and p styles for auth page */
+    .auth-header-title {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 1.6rem !important;
+        margin: 0 0 0.5rem 0 !important;
+    }
+    
+    .auth-subtitle {
+        color: #94a3b8 !important;
+        margin: 0 !important;
+        font-size: 0.95rem !important;
+    }
+    
+    .auth-tagline {
+        color: #ffffff !important;
+        font-size: 1.4rem !important;
+        margin: 1rem 0 0 0 !important;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
+        font-weight: 200 !important;
+        letter-spacing: 0.5px !important;
+        line-height: 1.4 !important;
+    }
+    
     /* Glass morphism effect for auth card */
     .glass-card {
         background: rgba(255, 255, 255, 0.95);
@@ -990,70 +1015,82 @@ def show_auth_page():
         padding: 3rem;
     }
     
-    /* Enhanced tab styling */
+    /* Enhanced tab styling - override base theme */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0;
-        background: rgba(255, 255, 255, 0.7);
-        border-radius: 16px;
-        padding: 4px;
-        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        gap: 0 !important;
+        background: rgba(255, 255, 255, 0.7) !important;
+        border-radius: 16px !important;
+        padding: 4px !important;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
     }
     
     .stTabs [data-baseweb="tab"] {
-        border-radius: 12px;
-        padding: 12px 24px;
-        font-weight: 600;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 12px !important;
+        padding: 12px 24px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        color: #64748b !important;
     }
     
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+        transform: scale(1.02) !important;
+    }
+    
+    .stTabs [aria-selected="true"] p {
+        color: #ffffff !important;
     }
     
     /* Enhanced input fields */
     .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.9);
-        border: 2px solid rgba(102, 126, 234, 0.2);
-        border-radius: 12px;
-        padding: 12px 16px;
-        font-size: 15px;
-        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.9) !important;
+        border: 2px solid rgba(102, 126, 234, 0.2) !important;
+        border-radius: 12px !important;
+        padding: 12px 16px !important;
+        font-size: 15px !important;
+        transition: all 0.3s ease !important;
+        color: #1e293b !important;
     }
     
     .stTextInput > div > div > input:hover {
-        border-color: rgba(102, 126, 234, 0.4);
-        background: rgba(255, 255, 255, 1);
+        border-color: rgba(102, 126, 234, 0.4) !important;
+        background: rgba(255, 255, 255, 1) !important;
     }
     
     .stTextInput > div > div > input:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
-        background: rgba(255, 255, 255, 1);
-        transform: translateY(-2px);
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1) !important;
+        background: rgba(255, 255, 255, 1) !important;
+        transform: translateY(-2px) !important;
     }
     
-    /* Enhanced buttons */
+    /* Enhanced buttons - override base theme */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        border: none;
-        border-radius: 12px;
-        padding: 14px 28px;
-        font-weight: 600;
-        font-size: 16px;
-        letter-spacing: 0.5px;
-        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 14px 28px !important;
+        font-weight: 600 !important;
+        font-size: 16px !important;
+        letter-spacing: 0.5px !important;
+        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        color: #ffffff !important;
+    }
+    
+    .stButton > button p {
+        color: #ffffff !important;
     }
     
     .stButton > button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+        transform: translateY(-3px) !important;
+        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4) !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
     }
     
     .stButton > button:active {
-        transform: translateY(-1px);
+        transform: translateY(-1px) !important;
     }
     
     /* Pulse animation for submit buttons */
@@ -1063,7 +1100,7 @@ def show_auth_page():
     }
     
     .stButton > button[type="primary"] {
-        animation: pulse 2s ease-in-out infinite;
+        animation: pulse 2s ease-in-out infinite !important;
     }
     
     /* Feature badges */
@@ -1091,27 +1128,27 @@ def show_auth_page():
     
     /* Alert styling */
     .stAlert {
-        border-radius: 12px;
-        border: none;
-        animation: fadeInUp 0.3s ease-out;
+        border-radius: 12px !important;
+        border: none !important;
+        animation: fadeInUp 0.3s ease-out !important;
     }
     
     /* Form container enhancement */
     [data-testid="stForm"] {
-        background: transparent;
-        border: none;
-        box-shadow: none;
-        padding: 0;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
     }
     
     /* Hide default streamlit elements on auth page */
     [data-testid="stHeader"] {
-        background: transparent;
+        background: transparent !important;
     }
     
     /* Tooltip enhancement */
     .stTextInput > label > div[data-testid="stTooltipIcon"] {
-        color: #667eea;
+        color: #667eea !important;
     }
                 
     </style>
@@ -1131,7 +1168,7 @@ def show_auth_page():
         <div class="logo-container">
             {logo_html}
         </div>
-        <p style="color: #ffffff !important; font-size: 1.4rem; margin: 1rem 0 0 0; text-shadow: 0 1px 3px rgba(0,0,0,0.4); font-weight: 200; letter-spacing: 0.5px; line-height: 1.4;">
+        <p class="auth-tagline">
             From SQL to Insights - Decode Data with dbt!
         </p>
     </div>
@@ -1150,15 +1187,13 @@ def show_auth_page():
     # Auth card with glass morphism
     col1, col2, col3 = st.columns([1, 2.5, 1])
     with col2:
-        #st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        
         tab1, tab2 = st.tabs(["🔐 Sign In", "✨ Create Account"])
 
         with tab1:
             st.markdown("""
             <div style="text-align: center; margin-bottom: 2rem;">
-                <div style="color: #ffffff !important; font-weight: 700 !important; font-size: 1.6rem !important; margin: 0 0 0.5rem 0;">Welcome Back!</div>
-                <p style="color: #64748b !important; margin: 0; font-size: 0.95rem;">Sign in to continue your learning journey</p>
+                <div class="auth-header-title">Welcome Back!</div>
+                <p class="auth-subtitle">Sign in to continue your learning journey</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -1188,8 +1223,8 @@ def show_auth_page():
         with tab2:
             st.markdown("""
             <div style="text-align: center; margin-bottom: 2rem;">
-                <h3 style="color: #ffffff !important; font-weight: 700 !important; font-size: 1.6rem !important; margin: 0 0 0.5rem 0;">Get Started Free</h3>
-                <p style="color: #64748b; margin: 0; font-size: 0.95rem;">Create your account and start learning today</p>
+                <div class="auth-header-title">Get Started Free</div>
+                <p class="auth-subtitle">Create your account and start learning today</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -1239,8 +1274,6 @@ def show_auth_page():
                                 st.success(f"🎉 {message}! Please sign in to continue.")
                             else:
                                 st.error(f"❌ {message}")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
     
     # Footer
     st.markdown("""
