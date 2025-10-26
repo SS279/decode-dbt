@@ -1549,7 +1549,7 @@ with col1:
         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.25rem;">
             {header_logo_html}
             <div style="
-                color: #60a5fa;
+                color: #3b82f6;
                 margin: 0;
                 font-size: 2rem;
                 font-weight: 700;
