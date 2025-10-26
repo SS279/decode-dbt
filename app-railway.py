@@ -938,13 +938,13 @@ def create_lesson_card(title, description, icon="📘", progress=0):
 # LOGIN/REGISTER INTERFACE
 # ====================================
 def show_auth_page():
-    # Enhanced CSS for smooth, interactive login page
+    # Enhanced CSS for smooth, interactive login page with light blue theme
     st.markdown("""
     <style>
-    /* Animated gradient background - IMPORTANT: Higher specificity */
+    /* Animated gradient background - Light Blue Theme */
     div[data-testid="stAppViewContainer"] > .main,
     .stApp {
-        background: linear-gradient(-45deg, #0a192f, #112240, #1a365d, #0d9488) !important;
+        background: linear-gradient(-45deg, #dbeafe, #bfdbfe, #93c5fd, #60a5fa) !important;
         background-size: 400% 400% !important;
         animation: gradientShift 15s ease infinite !important;
     }
@@ -983,24 +983,24 @@ def show_auth_page():
     
     /* Override any conflicting h3 and p styles for auth page */
     .auth-header-title {
-        color: #ffffff !important;
-        font-weight: 700 !important;
+        color: #1e40af !important;
+        font-weight: 300 !important;
         font-size: 1.6rem !important;
         margin: 0 0 0.5rem 0 !important;
     }
     
     .auth-subtitle {
-        color: #94a3b8 !important;
+        color: #475569 !important;
         margin: 0 !important;
         font-size: 0.95rem !important;
     }
     
     .auth-tagline {
-        color: #ffffff !important;
+        color: #1e3a8a !important;
         font-size: 1.4rem !important;
         margin: 1rem 0 0 0 !important;
-        text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
-        font-weight: 200 !important;
+        text-shadow: 0 2px 4px rgba(255, 255, 255, 0.5) !important;
+        font-weight: 500 !important;
         letter-spacing: 0.5px !important;
         line-height: 1.4 !important;
     }
@@ -1010,18 +1010,18 @@ def show_auth_page():
         background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(20px);
         border-radius: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
         padding: 3rem;
     }
     
     /* Enhanced tab styling - override base theme */
     .stTabs [data-baseweb="tab-list"] {
         gap: 0 !important;
-        background: rgba(255, 255, 255, 0.7) !important;
+        background: rgba(255, 255, 255, 0.9) !important;
         border-radius: 16px !important;
         padding: 4px !important;
-        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15) !important;
     }
     
     .stTabs [data-baseweb="tab"] {
@@ -1033,8 +1033,8 @@ def show_auth_page():
     }
     
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important;
         transform: scale(1.02) !important;
     }
     
@@ -1044,8 +1044,8 @@ def show_auth_page():
     
     /* Enhanced input fields */
     .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.9) !important;
-        border: 2px solid rgba(102, 126, 234, 0.2) !important;
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 2px solid rgba(59, 130, 246, 0.3) !important;
         border-radius: 12px !important;
         padding: 12px 16px !important;
         font-size: 15px !important;
@@ -1054,27 +1054,27 @@ def show_auth_page():
     }
     
     .stTextInput > div > div > input:hover {
-        border-color: rgba(102, 126, 234, 0.4) !important;
+        border-color: rgba(59, 130, 246, 0.5) !important;
         background: rgba(255, 255, 255, 1) !important;
     }
     
     .stTextInput > div > div > input:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1) !important;
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15) !important;
         background: rgba(255, 255, 255, 1) !important;
         transform: translateY(-2px) !important;
     }
     
     /* Enhanced buttons - override base theme */
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
         border: none !important;
         border-radius: 12px !important;
         padding: 14px 28px !important;
         font-weight: 600 !important;
         font-size: 16px !important;
         letter-spacing: 0.5px !important;
-        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3) !important;
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3) !important;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
         color: #ffffff !important;
     }
@@ -1085,8 +1085,8 @@ def show_auth_page():
     
     .stButton > button:hover {
         transform: translateY(-3px) !important;
-        box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4) !important;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4) !important;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
     }
     
     .stButton > button:active {
@@ -1095,8 +1095,8 @@ def show_auth_page():
     
     /* Pulse animation for submit buttons */
     @keyframes pulse {
-        0%, 100% { box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3); }
-        50% { box-shadow: 0 4px 24px rgba(102, 126, 234, 0.5); }
+        0%, 100% { box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3); }
+        50% { box-shadow: 0 4px 24px rgba(59, 130, 246, 0.5); }
     }
     
     .stButton > button[type="primary"] {
@@ -1108,22 +1108,24 @@ def show_auth_page():
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        background: rgba(255, 255, 255, 0.2);
-        border: 2px solid rgba(255, 255, 255, 0.4);
+        background: rgba(255, 255, 255, 0.9);
+        border: 2px solid rgba(59, 130, 246, 0.3);
         border-radius: 12px;
         padding: 8px 16px;
         margin: 8px 8px 8px 0;
         font-size: 14px;
         font-weight: 600;
-        color: #ffffff;
+        color: #1e40af;
         transition: all 0.3s ease;
         backdrop-filter: blur(10px);
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
     }
     
     .feature-badge:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
-        background: rgba(255, 255, 255, 0.3);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+        background: rgba(255, 255, 255, 1);
+        border-color: rgba(59, 130, 246, 0.5);
     }
     
     /* Alert styling */
@@ -1148,11 +1150,20 @@ def show_auth_page():
     
     /* Tooltip enhancement */
     .stTextInput > label > div[data-testid="stTooltipIcon"] {
-        color: #667eea !important;
+        color: #3b82f6 !important;
+    }
+    
+    /* Footer text color adjustment */
+    .auth-footer-text {
+        color: #475569 !important;
+        font-size: 0.9rem !important;
+        margin: 0 !important;
     }
                 
     </style>
     """, unsafe_allow_html=True)
+    
+    # ... rest of your function remains the same until the footer
     
     # Load logo image
     logo_base64 = get_base64_image("assets/website_logo.png")
@@ -1161,7 +1172,7 @@ def show_auth_page():
     if logo_base64:
         logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="width: 220px; height: auto;" alt="Decode dbt Logo">'
     else:
-        logo_html = '<div style="font-size: 4rem;">🦆</div><h1 style="color: #ffffff; margin: 1rem 0 0 0; font-size: 2.5rem; font-weight: 700;">Decode dbt</h1>'
+        logo_html = '<div style="font-size: 4rem;">🦆</div><h1 style="color: #1e40af; margin: 1rem 0 0 0; font-size: 2.5rem; font-weight: 700;">Decode dbt</h1>'
     
     st.markdown(f"""
     <div class="auth-container" style="text-align: center; padding: 2rem 0 3rem 0;">
@@ -1275,10 +1286,10 @@ def show_auth_page():
                             else:
                                 st.error(f"❌ {message}")
     
-    # Footer
+    # Footer - updated with better contrast
     st.markdown("""
     <div style="text-align: center; padding: 2rem 0 1rem 0;">
-        <p style="color: rgba(255, 255, 255, 0.8); font-size: 0.9rem; margin: 0;">
+        <p class="auth-footer-text">
             🔒 Your data is secure and encrypted
         </p>
     </div>
