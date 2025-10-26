@@ -983,7 +983,7 @@ def show_auth_page():
     
     /* Override any conflicting h3 and p styles for auth page */
     .auth-header-title {
-        color: #1e40af !important;
+        color: #ffffff !important;
         font-weight: 300 !important;
         font-size: 1.6rem !important;
         margin: 0 0 0.5rem 0 !important;
@@ -1163,17 +1163,26 @@ def show_auth_page():
     </style>
     """, unsafe_allow_html=True)
     
-    # ... rest of your function remains the same until the footer
-    
     # Load logo image
     logo_base64 = get_base64_image("assets/website_logo.png")
+    logo_header_base64 = get_base64_image("assets/website_header_logo.png")
     
     # Hero section with animated logo
-    if logo_base64:
-        logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="width: 220px; height: auto;" alt="Decode dbt Logo">'
-    else:
-        logo_html = '<div style="font-size: 4rem;">🦆</div><h1 style="color: #1e40af; margin: 1rem 0 0 0; font-size: 2.5rem; font-weight: 700;">Decode dbt</h1>'
-    
+    logo_html = f'''
+    <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
+        <img src="data:image/png;base64,{logo_header_base64}" style="width: 80px; height: auto;" alt="Decode Data Logo">
+        <h1 style="
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+            font-size: 3rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        ">Decode Data</h1>
+    </div>
+    '''
     st.markdown(f"""
     <div class="auth-container" style="text-align: center; padding: 2rem 0 3rem 0;">
         <div class="logo-container">
@@ -1520,10 +1529,27 @@ logo_base64 = get_base64_image("assets/website_logo.png")
 
 col1, col2, col3 = st.columns([3, 2, 1])
 with col1:
-    st.markdown("""
+    # Load header logo image
+    logo_header_base64 = get_base64_image("assets/website_header_logo.png")
+
+    header_logo_html = f'<img src="data:image/png;base64,{logo_header_base64}" style="width: 50px; height: auto; vertical-align: middle;" alt="Decode Data Logo">'
+
+    st.markdown(f"""
     <div style="text-align: left;">
-        <h1 style="color: #3b82f6; margin: 0;">🦆 Decode dbt</h1>
-        <p style="color: #94a3b8; font-size: 0.9rem; margin: 0.25rem 0 0 0;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.25rem;">
+            {header_logo_html}
+            <h1 style="
+                background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                margin: 0;
+                font-size: 2rem;
+                font-weight: 700;
+                letter-spacing: -0.5px;
+            ">Decode Data</h1>
+        </div>
+        <p style="color: #94a3b8; font-size: 0.9rem; margin: 0;">
             Interactive dbt Learning Platform
         </p>
     </div>
