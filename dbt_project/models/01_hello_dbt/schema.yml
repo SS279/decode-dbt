@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: staging_orders
+    description: "Cleans and standardizes raw order data."
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+
+  - name: refined_orders
+    description: "Contains only completed orders."
+    columns:
+      - name: status
+        tests:
+          - not_null
+
+  - name: sales_summary
+    description: "Aggregated spend per customer."
+    columns:
+      - name: total_spent
+        tests:
+          - not_null

@@ -1367,6 +1367,16 @@ LEARNER_SCHEMA = st.session_state["learner_schema"]
 # ====================================
 LESSONS = [
     {
+        "id": "hello_dbt",
+        "title": "Lesson 01 : Hello dbt: From Raw to Refined",
+        "description": "Introductory hands-on dbt exercise",
+        "model_dir": "models/01_hello_dbt",
+        "validation": {
+            "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
+            "expected_min": 2
+        },
+    },
+    {
         "id": "cafe_chain",
         "title": "☕ Café Chain Analytics",
         "description": "Analyze coffee shop sales, customer loyalty, and business performance metrics.",

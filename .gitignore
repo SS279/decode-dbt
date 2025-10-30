@@ -80,3 +80,7 @@ yarn-error.log*
 .streamlit/
 *.log
 logs/
+
+
+# Test scripts (backup)---------------------
+*theme.py
