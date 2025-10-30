@@ -1368,8 +1368,8 @@ LEARNER_SCHEMA = st.session_state["learner_schema"]
 LESSONS = [
     {
         "id": "hello_dbt",
-        "title": "Lesson 01 : Hello dbt: From Raw to Refined",
-        "description": "Introductory hands-on dbt exercise",
+        "title": "🧱 Hello dbt",
+        "description": "From Raw to Refined - Introductory hands-on dbt exercise",
         "model_dir": "models/01_hello_dbt",
         "validation": {
             "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
