@@ -1370,7 +1370,7 @@ LESSONS = [
         "id": "hello_dbt",
         "title": "🧱 Hello dbt",
         "description": "From Raw to Refined - Introductory hands-on dbt exercise",
-        "model_dir": "models/01_hello_dbt",
+        "model_dir": "models/hello_dbt",
         "validation": {
             "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
             "expected_min": 2
