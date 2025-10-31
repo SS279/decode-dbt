@@ -1614,8 +1614,6 @@ if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.va
             lesson_prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
             st.metric(lesson_item['title'].split()[1], f"{lesson_prog}%")
 
-# Replace the ENHANCED LESSON SELECTION section (around line 1050-1200) with this fixed version:
-
 # ====================================
 # ENHANCED LESSON SELECTION
 # ====================================
@@ -1716,76 +1714,77 @@ for category in lesson_categories:
             # Check if this is the selected lesson
             is_selected = lesson and lesson['id'] == lesson_item['id']
             
-            # Create a unique container key for each lesson card
-            with st.container():
-                # Icon and title
-                st.markdown(f"""
-                <div style="
-                    background: white;
-                    border: 2px solid {category['border_color']};
-                    border-radius: 12px;
-                    padding: 1.5rem;
-                    margin-bottom: 1rem;
-                    transition: all 0.3s ease;
-                ">
-                    <div style="display: flex; align-items: start; gap: 1rem;">
-                        <div style="font-size: 2.5rem;">{lesson_item['title'].split()[0]}</div>
-                        <div style="flex: 1;">
-                            <h4 style="color: {category['color']}; margin: 0 0 0.5rem 0; font-size: 1.2rem;">
-                                {' '.join(lesson_item['title'].split()[1:])}
-                                {' ✅' if is_selected else ''}
-                            </h4>
-                            <p style="color: #64748b; margin: 0 0 1rem 0; font-size: 0.9rem;">
-                                {lesson_item['description']}
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-                        <span style="background: {category['bg_color']}; color: {category['color']}; 
-                                     padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
-                            {'🟢' if metadata.get('difficulty') == 'Beginner' else '🟡' if metadata.get('difficulty') == 'Intermediate' else '🔴'} 
-                            {metadata.get('difficulty', 'Beginner')}
-                        </span>
-                        <span style="background: {category['bg_color']}; color: {category['color']}; 
-                                     padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
-                            ⏱️ {metadata.get('duration', '30 min')}
-                        </span>
+            # Icon and title
+            st.markdown(f"""
+            <div style="
+                background: white;
+                border: 2px solid {category['border_color']};
+                border-radius: 12px;
+                padding: 1.5rem;
+                margin-bottom: 1rem;
+                transition: all 0.3s ease;
+            ">
+                <div style="display: flex; align-items: start; gap: 1rem;">
+                    <div style="font-size: 2.5rem;">{lesson_item['title'].split()[0]}</div>
+                    <div style="flex: 1;">
+                        <h4 style="color: {category['color']}; margin: 0 0 0.5rem 0; font-size: 1.2rem;">
+                            {' '.join(lesson_item['title'].split()[1:])}
+                            {' ✅' if is_selected else ''}
+                        </h4>
+                        <p style="color: #64748b; margin: 0 0 1rem 0; font-size: 0.9rem;">
+                            {lesson_item['description']}
+                        </p>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
                 
-                # Topics
-                if metadata.get('topics'):
-                    topics_html = " ".join([
-                        f"<span style='background: {category['bg_color']}; color: {category['color']}; "
-                        f"padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem; "
-                        f"margin-right: 0.25rem; display: inline-block; margin-bottom: 0.25rem;'>{topic}</span>" 
-                        for topic in metadata['topics']
-                    ])
-                    st.markdown(f"**Topics:** {topics_html}", unsafe_allow_html=True)
+                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                    <span style="background: {category['bg_color']}; color: {category['color']}; 
+                                 padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                        {'🟢' if metadata.get('difficulty') == 'Beginner' else '🟡' if metadata.get('difficulty') == 'Intermediate' else '🔴'} 
+                        {metadata.get('difficulty', 'Beginner')}
+                    </span>
+                    <span style="background: {category['bg_color']}; color: {category['color']}; 
+                                 padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                        ⏱️ {metadata.get('duration', '30 min')}
+                    </span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Topics
+            if metadata.get('topics'):
+                topics_html = " ".join([
+                    f"<span style='background: {category['bg_color']}; color: {category['color']}; "
+                    f"padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem; "
+                    f"margin-right: 0.25rem; display: inline-block; margin-bottom: 0.25rem;'>{topic}</span>" 
+                    for topic in metadata['topics']
+                ])
+                st.markdown(f"**Topics:** {topics_html}", unsafe_allow_html=True)
+            
+            # Progress bar
+            if lesson_prog > 0:
+                st.progress(lesson_prog / 100, text=f"Progress: {lesson_prog}%")
                 
-                # Progress bar
-                if lesson_prog > 0:
-                    st.progress(lesson_prog / 100, text=f"Progress: {lesson_prog}%")
-                    
-                    if lesson_prog == 100:
-                        st.success("🏆 Completed!")
-                
-                # Select button
-                button_text = "✓ Selected" if is_selected else ("Continue Learning" if lesson_prog > 0 else "Start Lesson")
-                button_type = "primary" if not is_selected else "secondary"
-                
-                if st.button(
-                    button_text, 
-                    key=f"select_{lesson_item['id']}", 
-                    use_container_width=True, 
-                    type=button_type, 
-                    disabled=is_selected
-                ):
-                    st.session_state['selected_lesson'] = lesson_item
-                    lesson = lesson_item
-                    st.rerun()
+                if lesson_prog == 100:
+                    st.success("🏆 Completed!")
+            
+            # Select button with unique key
+            button_text = "✓ Selected" if is_selected else ("Continue Learning" if lesson_prog > 0 else "Start Lesson")
+            button_type = "primary" if not is_selected else "secondary"
+            
+            # Use a unique key combining category and lesson id
+            button_key = f"select_btn_{category['id']}_{lesson_item['id']}"
+            
+            if st.button(
+                button_text, 
+                key=button_key, 
+                use_container_width=True, 
+                type=button_type, 
+                disabled=is_selected
+            ):
+                st.session_state['selected_lesson'] = lesson_item
+                lesson = lesson_item
+                st.rerun()
 
 # Process selected lesson
 if lesson:
@@ -1833,7 +1832,7 @@ if lesson:
     """, unsafe_allow_html=True)
 else:
     st.info("👆 Please select a lesson above to get started!")
-    
+
 # ====================================
 # SANDBOX SETUP
 # ====================================
