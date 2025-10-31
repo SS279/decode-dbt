@@ -1614,179 +1614,15 @@ if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.va
             lesson_prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
             st.metric(lesson_item['title'].split()[1], f"{lesson_prog}%")
 
-# ====================================
-# ENHANCED LESSON SELECTION
-# ====================================
-st.markdown("### 🎓 Choose Your Learning Path")
+# Lesson Selection
+st.markdown("### 📚 Choose Your Learning Path")
+lesson = st.selectbox(
+    "Select a lesson to begin:",
+    LESSONS, 
+    format_func=lambda x: x["title"],
+    key="lesson_selector"
+)
 
-# Define lesson categories with enhanced metadata
-lesson_categories = [
-    {
-        "id": "introduction",
-        "name": "📘 Introduction",
-        "description": "Start your dbt journey with fundamentals",
-        "color": "#3b82f6",
-        "bg_color": "rgba(59, 130, 246, 0.1)",
-        "border_color": "rgba(59, 130, 246, 0.3)",
-        "lessons": ["hello_dbt"]
-    },
-    {
-        "id": "hospitality",
-        "name": "☕ Hospitality",
-        "description": "Real-world business analytics",
-        "color": "#f59e0b",
-        "bg_color": "rgba(245, 158, 11, 0.1)",
-        "border_color": "rgba(245, 158, 11, 0.3)",
-        "lessons": ["cafe_chain"]
-    },
-    {
-        "id": "energy",
-        "name": "⚡ Energy & IoT",
-        "description": "Smart technology & data modeling",
-        "color": "#10b981",
-        "bg_color": "rgba(16, 185, 129, 0.1)",
-        "border_color": "rgba(16, 185, 129, 0.3)",
-        "lessons": ["energy_smart"]
-    }
-]
-
-# Enhanced lesson metadata
-lesson_metadata = {
-    "hello_dbt": {
-        "difficulty": "Beginner",
-        "duration": "30 min",
-        "topics": ["dbt basics", "data modeling", "SQL transformations"]
-    },
-    "cafe_chain": {
-        "difficulty": "Intermediate",
-        "duration": "45 min",
-        "topics": ["sales analytics", "customer metrics", "KPIs"]
-    },
-    "energy_smart": {
-        "difficulty": "Advanced",
-        "duration": "60 min",
-        "topics": ["IoT data", "time series", "energy metrics"]
-    }
-}
-
-# Initialize selected lesson from session state if exists
-if 'selected_lesson' not in st.session_state:
-    st.session_state['selected_lesson'] = None
-
-# Get current lesson reference
-lesson = st.session_state.get('selected_lesson')
-
-# Display categories
-for category in lesson_categories:
-    # Category header
-    st.markdown(f"""
-    <div style="
-        background: {category['bg_color']};
-        border: 2px solid {category['border_color']};
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin: 1.5rem 0;
-    ">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-            <div>
-                <h3 style="color: {category['color']}; margin: 0 0 0.5rem 0; font-size: 1.5rem; font-weight: 700;">
-                    {category['name']}
-                </h3>
-                <p style="color: #64748b; margin: 0; font-size: 0.95rem;">
-                    {category['description']}
-                </p>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Get lessons for this category
-    category_lessons = [l for l in LESSONS if l['id'] in category['lessons']]
-    
-    # Display lesson cards in columns
-    cols = st.columns(len(category_lessons) if len(category_lessons) > 0 else 1)
-    for idx, lesson_item in enumerate(category_lessons):
-        with cols[idx]:
-            # Get progress
-            lesson_prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
-            metadata = lesson_metadata.get(lesson_item['id'], {})
-            
-            # Check if this is the selected lesson
-            is_selected = lesson and lesson['id'] == lesson_item['id']
-            
-            # Icon and title
-            st.markdown(f"""
-            <div style="
-                background: white;
-                border: 2px solid {category['border_color']};
-                border-radius: 12px;
-                padding: 1.5rem;
-                margin-bottom: 1rem;
-                transition: all 0.3s ease;
-            ">
-                <div style="display: flex; align-items: start; gap: 1rem;">
-                    <div style="font-size: 2.5rem;">{lesson_item['title'].split()[0]}</div>
-                    <div style="flex: 1;">
-                        <h4 style="color: {category['color']}; margin: 0 0 0.5rem 0; font-size: 1.2rem;">
-                            {' '.join(lesson_item['title'].split()[1:])}
-                            {' ✅' if is_selected else ''}
-                        </h4>
-                        <p style="color: #64748b; margin: 0 0 1rem 0; font-size: 0.9rem;">
-                            {lesson_item['description']}
-                        </p>
-                    </div>
-                </div>
-                
-                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-                    <span style="background: {category['bg_color']}; color: {category['color']}; 
-                                 padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
-                        {'🟢' if metadata.get('difficulty') == 'Beginner' else '🟡' if metadata.get('difficulty') == 'Intermediate' else '🔴'} 
-                        {metadata.get('difficulty', 'Beginner')}
-                    </span>
-                    <span style="background: {category['bg_color']}; color: {category['color']}; 
-                                 padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
-                        ⏱️ {metadata.get('duration', '30 min')}
-                    </span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Topics
-            if metadata.get('topics'):
-                topics_html = " ".join([
-                    f"<span style='background: {category['bg_color']}; color: {category['color']}; "
-                    f"padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem; "
-                    f"margin-right: 0.25rem; display: inline-block; margin-bottom: 0.25rem;'>{topic}</span>" 
-                    for topic in metadata['topics']
-                ])
-                st.markdown(f"**Topics:** {topics_html}", unsafe_allow_html=True)
-            
-            # Progress bar
-            if lesson_prog > 0:
-                st.progress(lesson_prog / 100, text=f"Progress: {lesson_prog}%")
-                
-                if lesson_prog == 100:
-                    st.success("🏆 Completed!")
-            
-            # Select button with unique key
-            button_text = "✓ Selected" if is_selected else ("Continue Learning" if lesson_prog > 0 else "Start Lesson")
-            button_type = "primary" if not is_selected else "secondary"
-            
-            # Use a unique key combining category and lesson id
-            button_key = f"select_btn_{category['id']}_{lesson_item['id']}"
-            
-            if st.button(
-                button_text, 
-                key=button_key, 
-                use_container_width=True, 
-                type=button_type, 
-                disabled=is_selected
-            ):
-                st.session_state['selected_lesson'] = lesson_item
-                lesson = lesson_item
-                st.rerun()
-
-# Process selected lesson
 if lesson:
     # Load lesson progress from storage
     current_progress = UserManager.get_progress(username, lesson['id'])
@@ -1803,35 +1639,17 @@ if lesson:
     st.session_state['lesson_progress'] = current_progress.get('lesson_progress', 0)
     st.session_state[f'progress_{lesson["id"]}'] = current_progress
     
+    # Display lesson card with progress
+    create_lesson_card(
+        lesson["title"], 
+        lesson["description"], 
+        lesson["title"].split()[0],
+        current_progress.get('lesson_progress', 0)
+    )
+    
     # Initialize current lesson
     if "current_lesson" not in st.session_state or st.session_state.current_lesson != lesson["id"]:
         st.session_state.current_lesson = lesson["id"]
-    
-    # Show selected lesson summary with better styling
-    metadata = lesson_metadata.get(lesson['id'], {})
-    st.markdown(f"""
-    <div style="
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-        border: 2px solid rgba(59, 130, 246, 0.3);
-        border-radius: 12px;
-        padding: 1rem 1.5rem;
-        margin: 1rem 0;
-    ">
-        <div style="display: flex; align-items: center; gap: 1rem;">
-            <span style="font-size: 2rem;">{lesson['title'].split()[0]}</span>
-            <div>
-                <h4 style="color: #3b82f6; margin: 0; font-size: 1.1rem;">
-                    Selected: {lesson['title']}
-                </h4>
-                <p style="color: #64748b; margin: 0.25rem 0 0 0; font-size: 0.9rem;">
-                    {metadata.get('difficulty', 'Beginner')} • {metadata.get('duration', '30 min')}
-                </p>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.info("👆 Please select a lesson above to get started!")
 
 # ====================================
 # SANDBOX SETUP
