@@ -1614,152 +1614,15 @@ if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.va
             lesson_prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
             st.metric(lesson_item['title'].split()[1], f"{lesson_prog}%")
 
-# ====================================
-# ENHANCED LESSON SELECTION
-# ====================================
-st.markdown("### 🎓 Choose Your Learning Path")
+# Lesson Selection
+st.markdown("### 📚 Choose Your Learning Path")
+lesson = st.selectbox(
+    "Select a lesson to begin:",
+    LESSONS, 
+    format_func=lambda x: x["title"],
+    key="lesson_selector"
+)
 
-# Define lesson categories with enhanced metadata
-lesson_categories = [
-    {
-        "id": "introduction",
-        "name": "📘 Introduction",
-        "description": "Start your dbt journey with fundamentals",
-        "color": "#3b82f6",
-        "bg_color": "rgba(59, 130, 246, 0.1)",
-        "border_color": "rgba(59, 130, 246, 0.3)",
-        "lessons": ["hello_dbt"]
-    },
-    {
-        "id": "hospitality",
-        "name": "☕ Hospitality",
-        "description": "Real-world business analytics",
-        "color": "#f59e0b",
-        "bg_color": "rgba(245, 158, 11, 0.1)",
-        "border_color": "rgba(245, 158, 11, 0.3)",
-        "lessons": ["cafe_chain"]
-    },
-    {
-        "id": "energy",
-        "name": "⚡ Energy & IoT",
-        "description": "Smart technology & data modeling",
-        "color": "#10b981",
-        "bg_color": "rgba(16, 185, 129, 0.1)",
-        "border_color": "rgba(16, 185, 129, 0.3)",
-        "lessons": ["energy_smart"]
-    }
-]
-
-# Enhanced lesson metadata
-lesson_metadata = {
-    "hello_dbt": {
-        "difficulty": "Beginner",
-        "duration": "30 min",
-        "topics": ["dbt basics", "data modeling", "SQL transformations"]
-    },
-    "cafe_chain": {
-        "difficulty": "Intermediate",
-        "duration": "45 min",
-        "topics": ["sales analytics", "customer metrics", "KPIs"]
-    },
-    "energy_smart": {
-        "difficulty": "Advanced",
-        "duration": "60 min",
-        "topics": ["IoT data", "time series", "energy metrics"]
-    }
-}
-
-# Initialize selected lesson from session state if exists
-if 'selected_lesson' not in st.session_state:
-    st.session_state['selected_lesson'] = None
-
-lesson = st.session_state.get('selected_lesson')
-
-# Display categories
-for category in lesson_categories:
-    # Category header
-    st.markdown(f"""
-    <div style="
-        background: {category['bg_color']};
-        border: 2px solid {category['border_color']};
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin: 1.5rem 0;
-    ">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-            <div>
-                <h3 style="color: {category['color']}; margin: 0 0 0.5rem 0; font-size: 1.5rem; font-weight: 700;">
-                    {category['name']}
-                </h3>
-                <p style="color: #64748b; margin: 0; font-size: 0.95rem;">
-                    {category['description']}
-                </p>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Get lessons for this category
-    category_lessons = [l for l in LESSONS if l['id'] in category['lessons']]
-    
-    # Display lesson cards in columns
-    cols = st.columns(len(category_lessons) if len(category_lessons) > 0 else 1)
-    for idx, lesson_item in enumerate(category_lessons):
-        with cols[idx]:
-            # Get progress
-            lesson_prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
-            metadata = lesson_metadata.get(lesson_item['id'], {})
-            
-            # Check if this is the selected lesson
-            is_selected = lesson and lesson['id'] == lesson_item['id']
-            
-            # Use a container for the card
-            with st.container():
-                # Icon and title
-                col_icon, col_title = st.columns([1, 4])
-                with col_icon:
-                    st.markdown(f"<div style='font-size: 3rem; text-align: center;'>{lesson_item['title'].split()[0]}</div>", unsafe_allow_html=True)
-                with col_title:
-                    title_text = ' '.join(lesson_item['title'].split()[1:])
-                    if is_selected:
-                        st.markdown(f"**{title_text}** ✅")
-                    else:
-                        st.markdown(f"**{title_text}**")
-                    st.caption(lesson_item['description'])
-                
-                # Metadata badges
-                col_diff, col_time = st.columns(2)
-                with col_diff:
-                    diff_emoji = {"Beginner": "🟢", "Intermediate": "🟡", "Advanced": "🔴"}
-                    st.markdown(f"{diff_emoji.get(metadata.get('difficulty', 'Beginner'), '⚪')} {metadata.get('difficulty', 'Beginner')}")
-                with col_time:
-                    st.markdown(f"⏱️ {metadata.get('duration', '30 min')}")
-                
-                # Topics
-                if metadata.get('topics'):
-                    st.markdown("**Topics:**")
-                    topics_html = " ".join([f"<span style='background: {category['bg_color']}; color: {category['color']}; padding: 0.25rem 0.5rem; border-radius: 8px; font-size: 0.75rem; margin-right: 0.25rem;'>{topic}</span>" for topic in metadata['topics']])
-                    st.markdown(topics_html, unsafe_allow_html=True)
-                
-                # Progress bar
-                if lesson_prog > 0:
-                    st.progress(lesson_prog / 100, text=f"Progress: {lesson_prog}%")
-                    
-                    if lesson_prog == 100:
-                        st.success("🏆 Completed!")
-                
-                # Select button
-                button_text = "✓ Selected" if is_selected else ("Continue Learning" if lesson_prog > 0 else "Start Lesson")
-                button_type = "primary" if not is_selected else "secondary"
-                
-                if st.button(button_text, key=f"select_{lesson_item['id']}", use_container_width=True, type=button_type, disabled=is_selected):
-                    st.session_state['selected_lesson'] = lesson_item
-                    lesson = lesson_item
-                    st.rerun()
-                
-                st.markdown("---")
-
-# Process selected lesson (maintains your original functionality)
 if lesson:
     # Load lesson progress from storage
     current_progress = UserManager.get_progress(username, lesson['id'])
@@ -1776,12 +1639,17 @@ if lesson:
     st.session_state['lesson_progress'] = current_progress.get('lesson_progress', 0)
     st.session_state[f'progress_{lesson["id"]}'] = current_progress
     
+    # Display lesson card with progress
+    create_lesson_card(
+        lesson["title"], 
+        lesson["description"], 
+        lesson["title"].split()[0],
+        current_progress.get('lesson_progress', 0)
+    )
+    
     # Initialize current lesson
     if "current_lesson" not in st.session_state or st.session_state.current_lesson != lesson["id"]:
         st.session_state.current_lesson = lesson["id"]
-    
-    # Show selected lesson summary
-    st.info(f"📚 **Selected:** {lesson['title']} - {lesson_metadata[lesson['id']]['difficulty']} ({lesson_metadata[lesson['id']]['duration']})")
 
 # ====================================
 # SANDBOX SETUP
