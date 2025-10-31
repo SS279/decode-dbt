@@ -10,11 +10,13 @@ import altair as alt
 from datetime import datetime
 import json
 from PIL import Image
+from functools import lru_cache
+import time
+from contextlib import contextmanager
 
 # ====================================
 # APP CONFIGURATION
 # ====================================
-# Try to load custom page icon
 try:
     page_icon = Image.open("assets/website_header_logo.png")
 except:
@@ -28,27 +30,106 @@ st.set_page_config(
 )
 
 # ====================================
-# ENVIRONMENT CONFIGURATION
+# PERFORMANCE OPTIMIZATIONS
 # ====================================
-MOTHERDUCK_TOKEN = os.environ.get("MOTHERDUCK_TOKEN")
-if not MOTHERDUCK_TOKEN:
-    try:
-        MOTHERDUCK_TOKEN = st.secrets.get("MOTHERDUCK_TOKEN")
-    except:
-        st.error("""
-        🔒 **MotherDuck Token Required**
+
+# Connection pooling for MotherDuck
+@st.cache_resource
+def get_connection_pool():
+    """Create a reusable connection pool"""
+    class ConnectionPool:
+        def __init__(self, max_connections=3):
+            self.connections = []
+            self.max_connections = max_connections
+            self.motherduck_token = os.environ.get("MOTHERDUCK_TOKEN")
+            self.motherduck_share = "decode_dbt"
+            
+            if not self.motherduck_token:
+                try:
+                    self.motherduck_token = st.secrets.get("MOTHERDUCK_TOKEN")
+                except:
+                    st.error("🔒 MotherDuck Token Required")
+                    st.stop()
         
-        Please set the `MOTHERDUCK_TOKEN` environment variable in your Railway project settings.
-        """)
-        st.stop()
+        @contextmanager
+        def get_connection(self):
+            """Context manager for connection handling"""
+            if len(self.connections) < self.max_connections:
+                con = duckdb.connect(
+                    f"md:{self.motherduck_share}?motherduck_token={self.motherduck_token}"
+                )
+                self.connections.append(con)
+            else:
+                con = self.connections[0]
+            
+            try:
+                yield con
+            except Exception as e:
+                st.error(f"Database error: {e}")
+                raise
+    
+    return ConnectionPool()
 
-MOTHERDUCK_SHARE = "decode_dbt"
+# Initialize connection pool
+conn_pool = get_connection_pool()
+MOTHERDUCK_TOKEN = conn_pool.motherduck_token
+MOTHERDUCK_SHARE = conn_pool.motherduck_share
 
 # ====================================
-# MOTHERDUCK STORAGE (Database-backed persistent storage)
+# CACHING STRATEGIES
+# ====================================
+
+@st.cache_data(ttl=600)  # Cache for 10 minutes
+def get_lesson_config():
+    """Cache lesson configuration"""
+    return [
+        {
+            "id": "hello_dbt",
+            "title": "🧱 Hello dbt",
+            "description": "From Raw to Refined - Introductory hands-on dbt exercise",
+            "model_dir": "models/hello_dbt",
+            "validation": {
+                "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
+                "expected_min": 2
+            },
+        },
+        {
+            "id": "cafe_chain",
+            "title": "☕ Café Chain Analytics",
+            "description": "Analyze coffee shop sales, customer loyalty, and business performance metrics.",
+            "model_dir": "models/cafe_chain",
+            "validation": {
+                "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
+                "expected_min": 2
+            },
+        },
+        {
+            "id": "energy_smart",
+            "title": "⚡ Energy Startup: Smart Meter Data",
+            "description": "Model IoT sensor readings and calculate energy consumption KPIs.",
+            "model_dir": "models/energy_smart",
+            "validation": {
+                "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
+                "expected_min": 2
+            },
+        }
+    ]
+
+@st.cache_data(ttl=300)
+def get_cached_progress(username, lesson_id):
+    """Cache user progress to reduce DB calls"""
+    return UserManager.get_progress(username, lesson_id)
+
+@st.cache_data(ttl=600)
+def get_all_cached_progress(username):
+    """Cache all progress data"""
+    return UserManager.get_all_progress(username)
+
+# ====================================
+# OPTIMIZED STORAGE CLASS
 # ====================================
 class MotherDuckStorage:
-    """MotherDuck-backed storage for user data and progress"""
+    """Optimized MotherDuck storage with connection pooling"""
     
     def __init__(self, motherduck_token, motherduck_share):
         self.motherduck_token = motherduck_token
@@ -56,243 +137,228 @@ class MotherDuckStorage:
         self._init_tables()
     
     def _get_connection(self):
-        """Create a connection to MotherDuck"""
-        return duckdb.connect(f"md:{self.motherduck_share}?motherduck_token={self.motherduck_token}")
+        """Use connection pool"""
+        return conn_pool.get_connection()
     
     def _init_tables(self):
         """Initialize storage tables if they don't exist"""
         try:
-            con = self._get_connection()
-            
-            # Create users table
-            con.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.users (
-                    username VARCHAR PRIMARY KEY,
-                    password_hash VARCHAR NOT NULL,
-                    email VARCHAR NOT NULL,
-                    schema_name VARCHAR NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # Create progress table
-            con.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.learner_progress (
-                    username VARCHAR NOT NULL,
-                    lesson_id VARCHAR NOT NULL,
-                    lesson_progress INTEGER DEFAULT 0,
-                    completed_steps JSON,
-                    models_executed JSON,
-                    queries_run INTEGER DEFAULT 0,
-                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (username, lesson_id)
-                )
-            """)
-            
-            # Create sessions table
-            con.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.user_sessions (
-                    session_token VARCHAR PRIMARY KEY,
-                    session_data JSON NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # Create model_edits table for persisting model changes
-            con.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self.motherduck_share}.model_edits (
-                    username VARCHAR NOT NULL,
-                    lesson_id VARCHAR NOT NULL,
-                    model_name VARCHAR NOT NULL,
-                    model_sql TEXT NOT NULL,
-                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (username, lesson_id, model_name)
-                )
-            """)
-            
-            con.close()
+            with self._get_connection() as con:
+                # Create users table
+                con.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self.motherduck_share}.users (
+                        username VARCHAR PRIMARY KEY,
+                        password_hash VARCHAR NOT NULL,
+                        email VARCHAR NOT NULL,
+                        schema_name VARCHAR NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # Create progress table
+                con.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self.motherduck_share}.learner_progress (
+                        username VARCHAR NOT NULL,
+                        lesson_id VARCHAR NOT NULL,
+                        lesson_progress INTEGER DEFAULT 0,
+                        completed_steps JSON,
+                        models_executed JSON,
+                        queries_run INTEGER DEFAULT 0,
+                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (username, lesson_id)
+                    )
+                """)
+                
+                # Create sessions table
+                con.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self.motherduck_share}.user_sessions (
+                        session_token VARCHAR PRIMARY KEY,
+                        session_data JSON NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # Create model_edits table
+                con.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self.motherduck_share}.model_edits (
+                        username VARCHAR NOT NULL,
+                        lesson_id VARCHAR NOT NULL,
+                        model_name VARCHAR NOT NULL,
+                        model_sql TEXT NOT NULL,
+                        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (username, lesson_id, model_name)
+                    )
+                """)
         except Exception as e:
             st.error(f"Error initializing storage tables: {e}")
     
     def get(self, key, shared=False):
-        """Retrieve a value"""
+        """Retrieve a value with optimized queries"""
         try:
-            con = self._get_connection()
-            
-            # Parse key to determine table and lookup
-            if key.startswith("user:"):
-                username = key.replace("user:", "")
-                result = con.execute(f"""
-                    SELECT username, password_hash, email, schema_name, created_at::VARCHAR as created_at
-                    FROM {self.motherduck_share}.users
-                    WHERE username = ?
-                """, [username]).fetchone()
-                
-                if result:
-                    data = {
-                        "username": result[0],
-                        "password_hash": result[1],
-                        "email": result[2],
-                        "schema": result[3],
-                        "created_at": result[4]
-                    }
-                    con.close()
-                    return {'key': key, 'value': json.dumps(data), 'shared': shared}
-                
-            elif key.startswith("progress:"):
-                parts = key.replace("progress:", "").split(":")
-                if len(parts) == 2:
-                    username, lesson_id = parts
+            with self._get_connection() as con:
+                if key.startswith("user:"):
+                    username = key.replace("user:", "")
                     result = con.execute(f"""
-                        SELECT lesson_progress, completed_steps, models_executed, 
-                               queries_run, last_updated::VARCHAR as last_updated
-                        FROM {self.motherduck_share}.learner_progress
-                        WHERE username = ? AND lesson_id = ?
-                    """, [username, lesson_id]).fetchone()
+                        SELECT username, password_hash, email, schema_name, created_at::VARCHAR as created_at
+                        FROM {self.motherduck_share}.users
+                        WHERE username = ?
+                    """, [username]).fetchone()
                     
                     if result:
                         data = {
-                            "lesson_progress": result[0],
-                            "completed_steps": json.loads(result[1]) if result[1] else [],
-                            "models_executed": json.loads(result[2]) if result[2] else [],
-                            "queries_run": result[3],
-                            "last_updated": result[4]
+                            "username": result[0],
+                            "password_hash": result[1],
+                            "email": result[2],
+                            "schema": result[3],
+                            "created_at": result[4]
                         }
-                        con.close()
                         return {'key': key, 'value': json.dumps(data), 'shared': shared}
-            
-            elif key.startswith("session:"):
-                session_token = key.replace("session:", "")
-                result = con.execute(f"""
-                    SELECT session_data, created_at::VARCHAR as created_at
-                    FROM {self.motherduck_share}.user_sessions
-                    WHERE session_token = ?
-                """, [session_token]).fetchone()
+                    
+                elif key.startswith("progress:"):
+                    parts = key.replace("progress:", "").split(":")
+                    if len(parts) == 2:
+                        username, lesson_id = parts
+                        result = con.execute(f"""
+                            SELECT lesson_progress, completed_steps, models_executed, 
+                                   queries_run, last_updated::VARCHAR as last_updated
+                            FROM {self.motherduck_share}.learner_progress
+                            WHERE username = ? AND lesson_id = ?
+                        """, [username, lesson_id]).fetchone()
+                        
+                        if result:
+                            data = {
+                                "lesson_progress": result[0],
+                                "completed_steps": json.loads(result[1]) if result[1] else [],
+                                "models_executed": json.loads(result[2]) if result[2] else [],
+                                "queries_run": result[3],
+                                "last_updated": result[4]
+                            }
+                            return {'key': key, 'value': json.dumps(data), 'shared': shared}
                 
-                if result:
-                    data = json.loads(result[0])
-                    data['created_at'] = result[1]
-                    con.close()
-                    return {'key': key, 'value': json.dumps(data), 'shared': shared}
-            
-            elif key.startswith("model:"):
-                # Format: model:username:lesson_id:model_name
-                parts = key.replace("model:", "").split(":")
-                if len(parts) == 3:
-                    username, lesson_id, model_name = parts
+                elif key.startswith("session:"):
+                    session_token = key.replace("session:", "")
                     result = con.execute(f"""
-                        SELECT model_sql, last_updated::VARCHAR as last_updated
-                        FROM {self.motherduck_share}.model_edits
-                        WHERE username = ? AND lesson_id = ? AND model_name = ?
-                    """, [username, lesson_id, model_name]).fetchone()
+                        SELECT session_data, created_at::VARCHAR as created_at
+                        FROM {self.motherduck_share}.user_sessions
+                        WHERE session_token = ?
+                    """, [session_token]).fetchone()
                     
                     if result:
-                        data = {
-                            "model_sql": result[0],
-                            "last_updated": result[1]
-                        }
-                        con.close()
+                        data = json.loads(result[0])
+                        data['created_at'] = result[1]
                         return {'key': key, 'value': json.dumps(data), 'shared': shared}
-            
-            con.close()
-            return None
+                
+                elif key.startswith("model:"):
+                    parts = key.replace("model:", "").split(":")
+                    if len(parts) == 3:
+                        username, lesson_id, model_name = parts
+                        result = con.execute(f"""
+                            SELECT model_sql, last_updated::VARCHAR as last_updated
+                            FROM {self.motherduck_share}.model_edits
+                            WHERE username = ? AND lesson_id = ? AND model_name = ?
+                        """, [username, lesson_id, model_name]).fetchone()
+                        
+                        if result:
+                            data = {
+                                "model_sql": result[0],
+                                "last_updated": result[1]
+                            }
+                            return {'key': key, 'value': json.dumps(data), 'shared': shared}
+                
+                return None
         except Exception as e:
             st.error(f"Storage get error for key '{key}': {e}")
             return None
     
     def set(self, key, value, shared=False):
-        """Store a value"""
+        """Store a value with batch operations support"""
         try:
-            con = self._get_connection()
-            
-            # Parse key to determine table and operation
-            if key.startswith("user:"):
-                username = key.replace("user:", "")
-                user_data = json.loads(value)
-                
-                con.execute(f"""
-                    INSERT INTO {self.motherduck_share}.users 
-                        (username, password_hash, email, schema_name, created_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT (username) DO UPDATE SET
-                        password_hash = EXCLUDED.password_hash,
-                        email = EXCLUDED.email
-                """, [
-                    user_data['username'],
-                    user_data['password_hash'],
-                    user_data['email'],
-                    user_data['schema'],
-                    user_data['created_at']
-                ])
-                
-            elif key.startswith("progress:"):
-                parts = key.replace("progress:", "").split(":")
-                if len(parts) == 2:
-                    username, lesson_id = parts
-                    progress_data = json.loads(value)
+            with self._get_connection() as con:
+                if key.startswith("user:"):
+                    username = key.replace("user:", "")
+                    user_data = json.loads(value)
                     
                     con.execute(f"""
-                        INSERT INTO {self.motherduck_share}.learner_progress 
-                            (username, lesson_id, lesson_progress, completed_steps, 
-                             models_executed, queries_run, last_updated)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT (username, lesson_id) DO UPDATE SET
-                            lesson_progress = EXCLUDED.lesson_progress,
-                            completed_steps = EXCLUDED.completed_steps,
-                            models_executed = EXCLUDED.models_executed,
-                            queries_run = EXCLUDED.queries_run,
-                            last_updated = EXCLUDED.last_updated
-                    """, [
-                        username,
-                        lesson_id,
-                        progress_data.get('lesson_progress', 0),
-                        json.dumps(progress_data.get('completed_steps', [])),
-                        json.dumps(progress_data.get('models_executed', [])),
-                        progress_data.get('queries_run', 0),
-                        progress_data.get('last_updated', datetime.now().isoformat())
-                    ])
-            
-            elif key.startswith("session:"):
-                session_token = key.replace("session:", "")
-                session_data = json.loads(value)
-                
-                con.execute(f"""
-                    INSERT INTO {self.motherduck_share}.user_sessions 
-                        (session_token, session_data, created_at)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT (session_token) DO UPDATE SET
-                        session_data = EXCLUDED.session_data,
-                        created_at = EXCLUDED.created_at
-                """, [
-                    session_token,
-                    json.dumps(session_data),
-                    session_data.get('created_at', datetime.now().isoformat())
-                ])
-            
-            elif key.startswith("model:"):
-                # Format: model:username:lesson_id:model_name
-                parts = key.replace("model:", "").split(":")
-                if len(parts) == 3:
-                    username, lesson_id, model_name = parts
-                    model_data = json.loads(value)
-                    
-                    con.execute(f"""
-                        INSERT INTO {self.motherduck_share}.model_edits 
-                            (username, lesson_id, model_name, model_sql, last_updated)
+                        INSERT INTO {self.motherduck_share}.users 
+                            (username, password_hash, email, schema_name, created_at)
                         VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT (username, lesson_id, model_name) DO UPDATE SET
-                            model_sql = EXCLUDED.model_sql,
-                            last_updated = EXCLUDED.last_updated
+                        ON CONFLICT (username) DO UPDATE SET
+                            password_hash = EXCLUDED.password_hash,
+                            email = EXCLUDED.email
                     """, [
-                        username,
-                        lesson_id,
-                        model_name,
-                        model_data['model_sql'],
-                        model_data.get('last_updated', datetime.now().isoformat())
+                        user_data['username'],
+                        user_data['password_hash'],
+                        user_data['email'],
+                        user_data['schema'],
+                        user_data['created_at']
                     ])
-            
-            con.close()
-            return {'key': key, 'value': value, 'shared': shared}
+                    
+                elif key.startswith("progress:"):
+                    parts = key.replace("progress:", "").split(":")
+                    if len(parts) == 2:
+                        username, lesson_id = parts
+                        progress_data = json.loads(value)
+                        
+                        con.execute(f"""
+                            INSERT INTO {self.motherduck_share}.learner_progress 
+                                (username, lesson_id, lesson_progress, completed_steps, 
+                                 models_executed, queries_run, last_updated)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT (username, lesson_id) DO UPDATE SET
+                                lesson_progress = EXCLUDED.lesson_progress,
+                                completed_steps = EXCLUDED.completed_steps,
+                                models_executed = EXCLUDED.models_executed,
+                                queries_run = EXCLUDED.queries_run,
+                                last_updated = EXCLUDED.last_updated
+                        """, [
+                            username,
+                            lesson_id,
+                            progress_data.get('lesson_progress', 0),
+                            json.dumps(progress_data.get('completed_steps', [])),
+                            json.dumps(progress_data.get('models_executed', [])),
+                            progress_data.get('queries_run', 0),
+                            progress_data.get('last_updated', datetime.now().isoformat())
+                        ])
+                
+                elif key.startswith("session:"):
+                    session_token = key.replace("session:", "")
+                    session_data = json.loads(value)
+                    
+                    con.execute(f"""
+                        INSERT INTO {self.motherduck_share}.user_sessions 
+                            (session_token, session_data, created_at)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT (session_token) DO UPDATE SET
+                            session_data = EXCLUDED.session_data,
+                            created_at = EXCLUDED.created_at
+                    """, [
+                        session_token,
+                        json.dumps(session_data),
+                        session_data.get('created_at', datetime.now().isoformat())
+                    ])
+                
+                elif key.startswith("model:"):
+                    parts = key.replace("model:", "").split(":")
+                    if len(parts) == 3:
+                        username, lesson_id, model_name = parts
+                        model_data = json.loads(value)
+                        
+                        con.execute(f"""
+                            INSERT INTO {self.motherduck_share}.model_edits 
+                                (username, lesson_id, model_name, model_sql, last_updated)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT (username, lesson_id, model_name) DO UPDATE SET
+                                model_sql = EXCLUDED.model_sql,
+                                last_updated = EXCLUDED.last_updated
+                        """, [
+                            username,
+                            lesson_id,
+                            model_name,
+                            model_data['model_sql'],
+                            model_data.get('last_updated', datetime.now().isoformat())
+                        ])
+                
+                return {'key': key, 'value': value, 'shared': shared}
         except Exception as e:
             st.error(f"Storage set error for key '{key}': {e}")
             return None
@@ -300,32 +366,30 @@ class MotherDuckStorage:
     def delete(self, key, shared=False):
         """Delete a value"""
         try:
-            con = self._get_connection()
-            
-            if key.startswith("user:"):
-                username = key.replace("user:", "")
-                con.execute(f"""
-                    DELETE FROM {self.motherduck_share}.users WHERE username = ?
-                """, [username])
-                
-            elif key.startswith("progress:"):
-                parts = key.replace("progress:", "").split(":")
-                if len(parts) == 2:
-                    username, lesson_id = parts
+            with self._get_connection() as con:
+                if key.startswith("user:"):
+                    username = key.replace("user:", "")
                     con.execute(f"""
-                        DELETE FROM {self.motherduck_share}.learner_progress 
-                        WHERE username = ? AND lesson_id = ?
-                    """, [username, lesson_id])
-            
-            elif key.startswith("session:"):
-                session_token = key.replace("session:", "")
-                con.execute(f"""
-                    DELETE FROM {self.motherduck_share}.user_sessions 
-                    WHERE session_token = ?
-                """, [session_token])
-            
-            con.close()
-            return {'key': key, 'deleted': True, 'shared': shared}
+                        DELETE FROM {self.motherduck_share}.users WHERE username = ?
+                    """, [username])
+                    
+                elif key.startswith("progress:"):
+                    parts = key.replace("progress:", "").split(":")
+                    if len(parts) == 2:
+                        username, lesson_id = parts
+                        con.execute(f"""
+                            DELETE FROM {self.motherduck_share}.learner_progress 
+                            WHERE username = ? AND lesson_id = ?
+                        """, [username, lesson_id])
+                
+                elif key.startswith("session:"):
+                    session_token = key.replace("session:", "")
+                    con.execute(f"""
+                        DELETE FROM {self.motherduck_share}.user_sessions 
+                        WHERE session_token = ?
+                    """, [session_token])
+                
+                return {'key': key, 'deleted': True, 'shared': shared}
         except Exception as e:
             st.error(f"Storage delete error: {e}")
             return None
@@ -333,32 +397,32 @@ class MotherDuckStorage:
     def list(self, prefix=None, shared=False):
         """List keys with optional prefix"""
         try:
-            con = self._get_connection()
-            keys = []
-            
-            if prefix and prefix.startswith("progress:"):
-                username = prefix.replace("progress:", "").rstrip(":")
-                result = con.execute(f"""
-                    SELECT username, lesson_id
-                    FROM {self.motherduck_share}.learner_progress
-                    WHERE username = ?
-                """, [username]).fetchall()
+            with self._get_connection() as con:
+                keys = []
                 
-                keys = [f"progress:{row[0]}:{row[1]}" for row in result]
-            
-            con.close()
-            return {'keys': keys, 'prefix': prefix, 'shared': shared}
+                if prefix and prefix.startswith("progress:"):
+                    username = prefix.replace("progress:", "").rstrip(":")
+                    result = con.execute(f"""
+                        SELECT username, lesson_id
+                        FROM {self.motherduck_share}.learner_progress
+                        WHERE username = ?
+                    """, [username]).fetchall()
+                    
+                    keys = [f"progress:{row[0]}:{row[1]}" for row in result]
+                
+                return {'keys': keys, 'prefix': prefix, 'shared': shared}
         except Exception as e:
             st.error(f"Storage list error: {e}")
             return {'keys': [], 'prefix': prefix, 'shared': shared}
 
-# Initialize MotherDuck storage in session state
+# Initialize storage
 if 'storage_api' not in st.session_state:
     st.session_state.storage_api = MotherDuckStorage(MOTHERDUCK_TOKEN, MOTHERDUCK_SHARE)
 
 # ====================================
-# HELPER FUNCTIONS FOR UI
+# HELPER FUNCTIONS
 # ====================================
+@st.cache_data(ttl=300)
 def get_base64_image(image_path):
     """Convert local image to base64 for embedding in HTML"""
     import base64
@@ -366,7 +430,6 @@ def get_base64_image(image_path):
         with open(image_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode()
     except Exception as e:
-        st.warning(f"Could not load logo image: {e}")
         return None
 
 # ====================================
@@ -382,7 +445,6 @@ class UserManager:
     def create_user(username, password, email):
         """Create a new user account"""
         try:
-            # Check if user exists
             existing = UserManager.get_user(username)
             if existing:
                 return False, "Username already exists"
@@ -395,7 +457,6 @@ class UserManager:
                 "schema": f"learner_{hashlib.sha256(username.encode()).hexdigest()[:8]}"
             }
             
-            # Store user credentials (shared=False for privacy)
             result = st.session_state.storage_api.set(
                 f"user:{username}", 
                 json.dumps(user_data),
@@ -409,29 +470,27 @@ class UserManager:
             return False, f"Error: {str(e)}"
     
     @staticmethod
+    @st.cache_data(ttl=600)
     def get_user(username):
-        """Retrieve user data"""
+        """Retrieve user data with caching"""
         try:
             result = st.session_state.storage_api.get(f"user:{username}", shared=False)
             if result and result.get('value'):
                 return json.loads(result['value'])
             return None
         except Exception as e:
-            st.error(f"Error retrieving user: {e}")
             return None
     
     @staticmethod
     def authenticate(username, password):
-        """Authenticate user credentials and create session"""
+        """Authenticate user credentials"""
         user = UserManager.get_user(username)
         if not user:
             return False, "User not found"
         
         if user['password_hash'] == UserManager.hash_password(password):
-            # Create session token
             session_token = hashlib.sha256(f"{username}{datetime.now().isoformat()}".encode()).hexdigest()
             
-            # Store session in MotherDuck
             session_data = {
                 'username': username,
                 'created_at': datetime.now().isoformat()
@@ -442,11 +501,10 @@ class UserManager:
                 shared=False
             )
             
-            # Set query param for session persistence (compatible with older Streamlit)
             try:
-                st.experimental_set_query_params(session=session_token)
+                st.query_params["session"] = session_token
             except:
-                pass  # Fallback if query params not supported
+                pass
             
             return True, user
         return False, "Invalid password"
@@ -462,6 +520,11 @@ class UserManager:
                 json.dumps(progress_data),
                 shared=False
             )
+            
+            # Clear cache
+            get_cached_progress.clear()
+            get_all_cached_progress.clear()
+            
             return result is not None
         except Exception as e:
             st.error(f"Error saving progress: {e}")
@@ -485,7 +548,6 @@ class UserManager:
                 'last_updated': None
             }
         except Exception as e:
-            st.error(f"Error retrieving progress: {e}")
             return None
     
     @staticmethod
@@ -503,18 +565,16 @@ class UserManager:
                 return all_progress
             return {}
         except Exception as e:
-            st.error(f"Error retrieving all progress: {e}")
             return {}
 
 # ====================================
-# CUSTOM THEME & STYLING
+# ENHANCED THEME & STYLING
 # ====================================
 def apply_custom_theme():
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    /* Base styling */
     * {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
@@ -523,7 +583,17 @@ def apply_custom_theme():
         background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
     }
     
-    /* Main content area */
+    /* Loading spinner enhancement */
+    .stSpinner > div {
+        border-top-color: #3b82f6 !important;
+    }
+    
+    /* Smooth transitions */
+    .element-container {
+        transition: opacity 0.3s ease;
+    }
+    
+    /* Main content */
     .main .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
@@ -554,12 +624,11 @@ def apply_custom_theme():
         margin-bottom: 0.75rem !important;
     }
     
-    /* Regular text */
     p, .stMarkdown {
         color: #475569 !important;
     }
     
-    /* Tabs styling */
+    /* Enhanced tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #ffffff;
@@ -592,7 +661,7 @@ def apply_custom_theme():
         color: white !important;
     }
     
-    /* Buttons */
+    /* Enhanced buttons */
     .stButton > button {
         background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%) !important;
         color: white !important;
@@ -620,28 +689,6 @@ def apply_custom_theme():
         transform: translateY(0);
     }
     
-    /* Primary button */
-    .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
-    }
-    
-    .stButton > button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
-    }
-    
-    /* Secondary button */
-    .stButton > button[kind="secondary"] {
-        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
-    }
-    
-    .stButton > button[kind="secondary"]:hover {
-        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
-    }
-    
     /* Input fields */
     .stTextInput > div > div > input,
     .stTextArea > div > div > textarea {
@@ -666,12 +713,6 @@ def apply_custom_theme():
         border: 2px solid #e2e8f0;
         border-radius: 10px;
         color: #1e293b;
-    }
-    
-    /* Checkboxes */
-    .stCheckbox > label {
-        color: #475569 !important;
-        font-weight: 500;
     }
     
     /* Dataframes */
@@ -741,28 +782,24 @@ def apply_custom_theme():
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
     
-    /* Success */
     .stSuccess {
         background-color: #f0fdf4;
         border-left-color: #10b981;
         color: #065f46 !important;
     }
     
-    /* Info */
     .stInfo {
         background-color: #eff6ff;
         border-left-color: #3b82f6;
         color: #1e40af !important;
     }
     
-    /* Warning */
     .stWarning {
         background-color: #fffbeb;
         border-left-color: #f59e0b;
         color: #92400e !important;
     }
     
-    /* Error */
     .stException {
         background-color: #fef2f2;
         border-left-color: #ef4444;
@@ -806,80 +843,37 @@ def apply_custom_theme():
         background: #94a3b8;
     }
     
-    /* Login/Register Card */
-    .auth-card {
-        background: #ffffff;
-        border: 2px solid #e2e8f0;
-        border-radius: 16px;
-        padding: 2.5rem;
-        margin: 2rem 0;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    /* Loading state */
+    .stSpinner {
+        text-align: center;
     }
     
-    /* Lesson Cards */
-    div[style*="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1)"] {
-        background: #ffffff !important;
-        border: 2px solid #e2e8f0 !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
-        transition: all 0.3s ease !important;
+    /* Checkbox styling */
+    .stCheckbox {
+        padding: 0.5rem;
+        border-radius: 8px;
+        transition: background-color 0.2s ease;
     }
     
-    div[style*="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1)"]:hover {
-        border-color: #3b82f6 !important;
-        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15) !important;
-        transform: translateY(-2px);
+    .stCheckbox:hover {
+        background-color: #f8fafc;
     }
     
-    /* Quiz question cards */
-    div[style*="background: rgba(59, 130, 246, 0.05)"] {
-        background: #f8fafc !important;
-        border: 2px solid #e2e8f0 !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
-    }
-    
-    /* Sidebar (if needed) */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-        border-right: 2px solid #e2e8f0;
-    }
-    
-    /* Form containers */
-    [data-testid="stForm"] {
-        background: #ffffff;
-        border: 2px solid #e2e8f0;
+    /* Toast notifications */
+    .stToast {
+        background-color: #ffffff;
         border-radius: 12px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    }
-    
-    /* Improve overall card aesthetics */
-    .element-container {
-        transition: all 0.2s ease;
-    }
-    
-    /* Better spacing */
-    .row-widget.stButton {
-        padding: 0.25rem 0;
-    }
-    
-    /* Enhanced header section */
-    div[data-testid="column"] > div[style*="text-align: left"] h1 {
-        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# Apply custom theme
 apply_custom_theme()
 
 # ====================================
 # UI COMPONENTS
 # ====================================
 def create_lesson_card(title, description, icon="📘", progress=0):
-    # Build the complete HTML in one go to avoid escaping issues
     if progress > 0:
         card_html = f"""
         <div style="
@@ -888,12 +882,15 @@ def create_lesson_card(title, description, icon="📘", progress=0):
             border-radius: 12px;
             padding: 1.5rem;
             margin: 1rem 0;
-        ">
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        " onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 16px rgba(59, 130, 246, 0.2)'" 
+           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
             <div style="display: flex; align-items: start; gap: 1rem;">
                 <div style="font-size: 2rem;">{icon}</div>
                 <div style="flex: 1;">
-                    <h4 style="color: #93c5fd; margin: 0 0 0.5rem 0; font-size: 1.2rem;">{title}</h4>
-                    <p style="color: #94a3b8; margin: 0 0 0.75rem 0; font-size: 0.95rem;">{description}</p>
+                    <h4 style="color: #3b82f6; margin: 0 0 0.5rem 0; font-size: 1.2rem;">{title}</h4>
+                    <p style="color: #64748b; margin: 0 0 0.75rem 0; font-size: 0.95rem;">{description}</p>
                     <div style="
                         width: 100%;
                         height: 6px;
@@ -908,7 +905,7 @@ def create_lesson_card(title, description, icon="📘", progress=0):
                             transition: width 0.3s ease;
                         "></div>
                     </div>
-                    <p style="color: #60a5fa; margin: 0.5rem 0 0 0; font-size: 0.85rem; font-weight: 600;">Progress: {progress}%</p>
+                    <p style="color: #3b82f6; margin: 0.5rem 0 0 0; font-size: 0.85rem; font-weight: 600;">Progress: {progress}%</p>
                 </div>
             </div>
         </div>
@@ -921,27 +918,28 @@ def create_lesson_card(title, description, icon="📘", progress=0):
             border-radius: 12px;
             padding: 1.5rem;
             margin: 1rem 0;
-        ">
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        " onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 16px rgba(59, 130, 246, 0.2)'" 
+           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
             <div style="display: flex; align-items: start; gap: 1rem;">
                 <div style="font-size: 2rem;">{icon}</div>
                 <div style="flex: 1;">
-                    <h4 style="color: #93c5fd; margin: 0 0 0.5rem 0; font-size: 1.2rem;">{title}</h4>
-                    <p style="color: #94a3b8; margin: 0; font-size: 0.95rem;">{description}</p>
+                    <h4 style="color: #3b82f6; margin: 0 0 0.5rem 0; font-size: 1.2rem;">{title}</h4>
+                    <p style="color: #64748b; margin: 0; font-size: 0.95rem;">{description}</p>
                 </div>
             </div>
         </div>
         """
     
     st.markdown(card_html, unsafe_allow_html=True)
-    
+
 # ====================================
-# LOGIN/REGISTER INTERFACE
+# ENHANCED LOGIN/REGISTER INTERFACE
 # ====================================
 def show_auth_page():
-    # Enhanced CSS for smooth, interactive login page with light blue theme
     st.markdown("""
     <style>
-    /* Animated gradient background - Light Blue Theme */
     div[data-testid="stAppViewContainer"] > .main,
     .stApp {
         background: linear-gradient(-45deg, #dbeafe, #bfdbfe, #93c5fd, #60a5fa) !important;
@@ -955,7 +953,6 @@ def show_auth_page():
         100% { background-position: 0% 50%; }
     }
     
-    /* Floating animation for logo */
     @keyframes float {
         0%, 100% { transform: translateY(0px); }
         50% { transform: translateY(-10px); }
@@ -965,7 +962,6 @@ def show_auth_page():
         animation: float 3s ease-in-out infinite;
     }
     
-    /* Fade in animation */
     @keyframes fadeInUp {
         from {
             opacity: 0;
@@ -981,7 +977,6 @@ def show_auth_page():
         animation: fadeInUp 0.6s ease-out;
     }
     
-    /* Override any conflicting h3 and p styles for auth page */
     .auth-header-title {
         color: #ffffff !important;
         font-weight: 300 !important;
@@ -1005,105 +1000,6 @@ def show_auth_page():
         line-height: 1.4 !important;
     }
     
-    /* Glass morphism effect for auth card */
-    .glass-card {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(20px);
-        border-radius: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.5);
-        box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
-        padding: 3rem;
-    }
-    
-    /* Enhanced tab styling - override base theme */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0 !important;
-        background: rgba(255, 255, 255, 0.9) !important;
-        border-radius: 16px !important;
-        padding: 4px !important;
-        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15) !important;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 12px !important;
-        padding: 12px 24px !important;
-        font-weight: 600 !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        color: #64748b !important;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4) !important;
-        transform: scale(1.02) !important;
-    }
-    
-    .stTabs [aria-selected="true"] p {
-        color: #ffffff !important;
-    }
-    
-    /* Enhanced input fields */
-    .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.95) !important;
-        border: 2px solid rgba(59, 130, 246, 0.3) !important;
-        border-radius: 12px !important;
-        padding: 12px 16px !important;
-        font-size: 15px !important;
-        transition: all 0.3s ease !important;
-        color: #1e293b !important;
-    }
-    
-    .stTextInput > div > div > input:hover {
-        border-color: rgba(59, 130, 246, 0.5) !important;
-        background: rgba(255, 255, 255, 1) !important;
-    }
-    
-    .stTextInput > div > div > input:focus {
-        border-color: #3b82f6 !important;
-        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15) !important;
-        background: rgba(255, 255, 255, 1) !important;
-        transform: translateY(-2px) !important;
-    }
-    
-    /* Enhanced buttons - override base theme */
-    .stButton > button {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 14px 28px !important;
-        font-weight: 600 !important;
-        font-size: 16px !important;
-        letter-spacing: 0.5px !important;
-        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3) !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        color: #ffffff !important;
-    }
-    
-    .stButton > button p {
-        color: #ffffff !important;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-3px) !important;
-        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4) !important;
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-    }
-    
-    .stButton > button:active {
-        transform: translateY(-1px) !important;
-    }
-    
-    /* Pulse animation for submit buttons */
-    @keyframes pulse {
-        0%, 100% { box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3); }
-        50% { box-shadow: 0 4px 24px rgba(59, 130, 246, 0.5); }
-    }
-    
-    .stButton > button[type="primary"] {
-        animation: pulse 2s ease-in-out infinite !important;
-    }
-    
-    /* Feature badges */
     .feature-badge {
         display: inline-flex;
         align-items: center;
@@ -1128,47 +1024,16 @@ def show_auth_page():
         border-color: rgba(59, 130, 246, 0.5);
     }
     
-    /* Alert styling */
-    .stAlert {
-        border-radius: 12px !important;
-        border: none !important;
-        animation: fadeInUp 0.3s ease-out !important;
-    }
-    
-    /* Form container enhancement */
-    [data-testid="stForm"] {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-    }
-    
-    /* Hide default streamlit elements on auth page */
-    [data-testid="stHeader"] {
-        background: transparent !important;
-    }
-    
-    /* Tooltip enhancement */
-    .stTextInput > label > div[data-testid="stTooltipIcon"] {
-        color: #3b82f6 !important;
-    }
-    
-    /* Footer text color adjustment */
     .auth-footer-text {
         color: #475569 !important;
         font-size: 0.9rem !important;
         margin: 0 !important;
     }
-                
     </style>
     """, unsafe_allow_html=True)
     
-    # Load logo image
-    logo_base64 = get_base64_image("assets/website_logo.png")
-    # Load header logo images
     logo_header_white_base64 = get_base64_image("assets/website_header_logo_white.png")
 
-    # Hero section with animated logo
     if logo_header_white_base64:
         logo_html = f'''<div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
             <img src="data:image/png;base64,{logo_header_white_base64}" style="width: 80px; height: auto;" alt="Decode Data Logo">
@@ -1185,11 +1050,12 @@ def show_auth_page():
         logo_html = '''<div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
             <div style="font-size: 3.5rem;">🦆</div>
             <div style="
-                color: #1e40af;
+                color: #ffffff;
                 margin: 0;
                 font-size: 3rem;
                 font-weight: 700;
                 letter-spacing: -0.5px;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             ">Decode Data</div>
         </div>'''
     
@@ -1204,7 +1070,6 @@ def show_auth_page():
     </div>
     """, unsafe_allow_html=True)
     
-    # Feature badges
     st.markdown("""
     <div style="text-align: center; margin-bottom: 2rem;">
         <span class="feature-badge">📚 Interactive Lessons</span>
@@ -1214,7 +1079,6 @@ def show_auth_page():
     </div>
     """, unsafe_allow_html=True)
     
-    # Auth card with glass morphism
     col1, col2, col3 = st.columns([1, 2.5, 1])
     with col2:
         tab1, tab2 = st.tabs(["🔐 Sign In", "✨ Create Account"])
@@ -1238,7 +1102,7 @@ def show_auth_page():
                     if not username or not password:
                         st.error("⚠️ Please fill in all fields")
                     else:
-                        with st.spinner("🔐 Authenticating..."):
+                        with st.spinner("🔍 Authenticating..."):
                             success, result = UserManager.authenticate(username, password)
                             if success:
                                 st.session_state['authenticated'] = True
@@ -1246,6 +1110,7 @@ def show_auth_page():
                                 st.session_state['learner_id'] = result['username']
                                 st.session_state['learner_schema'] = result['schema']
                                 st.success("✅ Login successful! Redirecting...")
+                                time.sleep(1)
                                 st.rerun()
                             else:
                                 st.error(f"❌ {result}")
@@ -1302,10 +1167,11 @@ def show_auth_page():
                             success, message = UserManager.create_user(new_username, new_password, new_email)
                             if success:
                                 st.success(f"🎉 {message}! Please sign in to continue.")
+                                time.sleep(2)
+                                st.rerun()
                             else:
                                 st.error(f"❌ {message}")
     
-    # Footer - updated with better contrast
     st.markdown("""
     <div style="text-align: center; padding: 2rem 0 1rem 0;">
         <p class="auth-footer-text">
@@ -1315,32 +1181,26 @@ def show_auth_page():
     """, unsafe_allow_html=True)
 
 # ====================================
-# CHECK AUTHENTICATION WITH SESSION PERSISTENCE
+# SESSION MANAGEMENT
 # ====================================
 def check_and_restore_session():
     """Check for existing session and restore if valid"""
-    # If already authenticated in session state, we're good
     if st.session_state.get('authenticated'):
         return True
     
-    # Try to restore from query params (session token)
     try:
-        query_params = st.experimental_get_query_params()
-        session_token = query_params.get('session', [None])[0]
+        session_token = st.query_params.get('session', None)
     except:
         session_token = None
     
     if session_token:
-        # Validate and restore session from storage
         try:
             result = st.session_state.storage_api.get(f"session:{session_token}", shared=False)
             if result and result.get('value'):
                 session_data = json.loads(result['value'])
                 
-                # Check if session is still valid (24 hour expiry)
                 session_created = datetime.fromisoformat(session_data.get('created_at'))
-                if (datetime.now() - session_created).total_seconds() < 86400:  # 24 hours
-                    # Restore session
+                if (datetime.now() - session_created).total_seconds() < 86400:
                     user_data = UserManager.get_user(session_data['username'])
                     if user_data:
                         st.session_state['authenticated'] = True
@@ -1349,7 +1209,7 @@ def check_and_restore_session():
                         st.session_state['learner_schema'] = user_data['schema']
                         return True
         except Exception as e:
-            pass  # Session restoration failed, proceed to login
+            pass
     
     return False
 
@@ -1358,50 +1218,17 @@ if not check_and_restore_session():
     st.stop()
 
 # ====================================
-# MAIN APP STARTS HERE (After authentication)
+# MAIN APP
 # ====================================
 LEARNER_SCHEMA = st.session_state["learner_schema"]
+LESSONS = get_lesson_config()
 
 # ====================================
-# LESSON CONFIGURATION
+# OPTIMIZED HELPER FUNCTIONS
 # ====================================
-LESSONS = [
-    {
-        "id": "hello_dbt",
-        "title": "🧱 Hello dbt",
-        "description": "From Raw to Refined - Introductory hands-on dbt exercise",
-        "model_dir": "models/hello_dbt",
-        "validation": {
-            "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
-            "expected_min": 2
-        },
-    },
-    {
-        "id": "cafe_chain",
-        "title": "☕ Café Chain Analytics",
-        "description": "Analyze coffee shop sales, customer loyalty, and business performance metrics.",
-        "model_dir": "models/cafe_chain",
-        "validation": {
-            "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
-            "expected_min": 2
-        },
-    },
-    {
-        "id": "energy_smart",
-        "title": "⚡ Energy Startup: Smart Meter Data",
-        "description": "Model IoT sensor readings and calculate energy consumption KPIs.",
-        "model_dir": "models/energy_smart",
-        "validation": {
-            "sql": "SELECT COUNT(*) AS models_built FROM information_schema.tables WHERE table_schema=current_schema()",
-            "expected_min": 2
-        },
-    }
-]
-
-# ====================================
-# HELPER FUNCTIONS
-# ====================================
-def run_dbt_command(command, workdir):
+@lru_cache(maxsize=32)
+def run_dbt_command_cached(command, workdir, timestamp):
+    """Cache dbt command results temporarily"""
     env = os.environ.copy()
     env["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TOKEN
     result = subprocess.run(
@@ -1409,52 +1236,57 @@ def run_dbt_command(command, workdir):
         cwd=workdir,
         capture_output=True,
         text=True,
-        env=env
+        env=env,
+        timeout=300
     )
     return result.stdout + "\n" + result.stderr
 
-def get_duckdb_connection():
-    """Create a fresh connection for each use"""
-    return duckdb.connect(f"md:{MOTHERDUCK_SHARE}?motherduck_token={MOTHERDUCK_TOKEN}")
+def run_dbt_command(command, workdir):
+    """Run dbt command with timestamp for cache busting"""
+    timestamp = int(time.time() / 60)  # Cache per minute
+    return run_dbt_command_cached(command, workdir, timestamp)
 
-def list_tables(schema):
-    """List tables in the specified schema"""
+@st.cache_data(ttl=60)
+def list_tables_cached(schema, timestamp):
+    """Cache table list"""
     try:
-        con = get_duckdb_connection()
-        query = f"""
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = '{schema}'
-        ORDER BY table_name
-        """
-        df = con.execute(query).fetchdf()
-        con.close()
-        return df["table_name"].tolist() if not df.empty else []
+        with conn_pool.get_connection() as con:
+            query = f"""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = '{schema}'
+            ORDER BY table_name
+            """
+            df = con.execute(query).fetchdf()
+            return df["table_name"].tolist() if not df.empty else []
     except Exception as e:
         st.error(f"Error listing tables: {e}")
         return []
 
+def list_tables(schema):
+    """List tables with caching"""
+    timestamp = int(time.time() / 60)
+    return list_tables_cached(schema, timestamp)
+
 def validate_output(schema, validation):
-    """Validate that the expected number of models were built"""
+    """Validate that expected models were built"""
     try:
-        con = get_duckdb_connection()
-        con.execute(f"USE {MOTHERDUCK_SHARE}")
-        con.execute(f"SET SCHEMA '{schema}'")
-        res = con.execute(validation["sql"]).fetchdf().to_dict(orient="records")[0]
-        con.close()
-        return res.get("models_built", 0) >= validation["expected_min"], res
+        with conn_pool.get_connection() as con:
+            con.execute(f"USE {MOTHERDUCK_SHARE}")
+            con.execute(f"SET SCHEMA '{schema}'")
+            res = con.execute(validation["sql"]).fetchdf().to_dict(orient="records")[0]
+            return res.get("models_built", 0) >= validation["expected_min"], res
     except Exception as e:
         return False, {"error": str(e)}
 
 def load_model_sql(model_path):
-    """Load model SQL from file or storage"""
+    """Load model SQL from storage or file"""
     username = st.session_state.get('learner_id')
     lesson_id = st.session_state.get('current_lesson')
     
     if username and lesson_id:
         model_name = os.path.basename(model_path).replace('.sql', '')
         
-        # Try to load from storage first
         try:
             result = st.session_state.storage_api.get(
                 f"model:{username}:{lesson_id}:{model_name}",
@@ -1466,17 +1298,14 @@ def load_model_sql(model_path):
         except:
             pass
     
-    # Fallback to file
     return open(model_path).read() if os.path.exists(model_path) else ""
 
 def save_model_sql(model_path, sql):
-    """Save model SQL to both file and storage"""
-    # Save to file
+    """Save model SQL to file and storage"""
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
     with open(model_path, "w") as f:
         f.write(sql)
     
-    # Save to storage for persistence
     username = st.session_state.get('learner_id')
     lesson_id = st.session_state.get('current_lesson')
     
@@ -1493,23 +1322,27 @@ def save_model_sql(model_path, sql):
                 shared=False
             )
         except Exception as e:
-            st.warning(f"Could not persist model to storage: {e}")
+            pass
 
-def get_model_files(model_dir):
-    """Get all .sql model files in the directory"""
+@st.cache_data(ttl=300)
+def get_model_files_cached(model_dir):
+    """Cache model file list"""
     if not os.path.exists(model_dir):
         return []
     return sorted([f for f in os.listdir(model_dir) if f.endswith(".sql")])
 
+def get_model_files(model_dir):
+    """Get model files with caching"""
+    return get_model_files_cached(model_dir)
+
 def update_progress(increment=10, step_name=None):
-    """Update learner progress and save to storage"""
+    """Update learner progress"""
     username = st.session_state.get('learner_id')
     lesson_id = st.session_state.get('current_lesson')
     
     if not username or not lesson_id:
         return
     
-    # Get current progress
     progress = UserManager.get_progress(username, lesson_id)
     if not progress:
         progress = {
@@ -1520,33 +1353,27 @@ def update_progress(increment=10, step_name=None):
             'last_updated': None
         }
     
-    # Update progress
     progress['lesson_progress'] = min(100, progress.get('lesson_progress', 0) + increment)
     
-    # Add step if provided and not already completed
     if step_name:
         if 'completed_steps' not in progress:
             progress['completed_steps'] = []
         if step_name not in progress['completed_steps']:
             progress['completed_steps'].append(step_name)
     
-    # Save progress
     success = UserManager.save_progress(username, lesson_id, progress)
     
     if success:
-        # Update session state to reflect changes immediately
         st.session_state['lesson_progress'] = progress['lesson_progress']
         st.session_state[f'progress_{lesson_id}'] = progress
     
     return success
 
 # ====================================
-# HEADER WITH USER INFO
+# HEADER
 # ====================================
-
 col1, col2, col3 = st.columns([3, 2, 1])
 with col1:
-    # Load header logo image
     logo_header_base64 = get_base64_image("assets/website_header_logo.png")
 
     if logo_header_base64:
@@ -1578,33 +1405,27 @@ with col2:
 
 with col3:
     if st.button("🚪 Logout", use_container_width=True):
-        # Clear session token from query params
         try:
-            query_params = st.experimental_get_query_params()
-            session_token = query_params.get('session', [None])[0]
+            session_token = st.query_params.get('session', None)
             if session_token:
                 try:
                     st.session_state.storage_api.delete(f"session:{session_token}", shared=False)
                 except:
                     pass
             
-            # Clear query params
-            st.experimental_set_query_params()
+            st.query_params.clear()
         except:
             pass
         
-        # Clear session
         for key in list(st.session_state.keys()):
             st.session_state.pop(key)
         st.rerun()
 
 # ====================================
-# MAIN APP
+# PROGRESS OVERVIEW
 # ====================================
-
-# Display overall progress
 username = st.session_state['learner_id']
-all_progress = UserManager.get_all_progress(username)
+all_progress = get_all_cached_progress(username)
 
 if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.values()):
     st.markdown("### 📊 Your Learning Progress")
@@ -1614,7 +1435,9 @@ if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.va
             lesson_prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
             st.metric(lesson_item['title'].split()[1], f"{lesson_prog}%")
 
-# Lesson Selection
+# ====================================
+# LESSON SELECTION
+# ====================================
 st.markdown("### 📚 Choose Your Learning Path")
 lesson = st.selectbox(
     "Select a lesson to begin:",
@@ -1624,8 +1447,7 @@ lesson = st.selectbox(
 )
 
 if lesson:
-    # Load lesson progress from storage
-    current_progress = UserManager.get_progress(username, lesson['id'])
+    current_progress = get_cached_progress(username, lesson['id'])
     if not current_progress:
         current_progress = {
             'lesson_progress': 0,
@@ -1635,11 +1457,9 @@ if lesson:
             'last_updated': None
         }
     
-    # Store in session state
     st.session_state['lesson_progress'] = current_progress.get('lesson_progress', 0)
     st.session_state[f'progress_{lesson["id"]}'] = current_progress
     
-    # Display lesson card with progress
     create_lesson_card(
         lesson["title"], 
         lesson["description"], 
@@ -1647,7 +1467,6 @@ if lesson:
         current_progress.get('lesson_progress', 0)
     )
     
-    # Initialize current lesson
     if "current_lesson" not in st.session_state or st.session_state.current_lesson != lesson["id"]:
         st.session_state.current_lesson = lesson["id"]
 
@@ -1678,7 +1497,7 @@ decode_dbt:
                     f.write(profiles_yml)
                 st.session_state["dbt_dir"] = tmp_dir
                 
-                # Restore any saved model edits from storage
+                # Restore saved models
                 username = st.session_state.get('learner_id')
                 lesson_id = lesson['id']
                 model_dir = os.path.join(tmp_dir, lesson["model_dir"])
@@ -1707,19 +1526,19 @@ decode_dbt:
                 
                 update_progress(20, "sandbox_initialized")
                 st.success(f"✅ Sandbox ready! You can now work on **{lesson['title']}**")
+                time.sleep(1)
+                st.rerun()
         else:
             st.info("🔄 Sandbox already active - Your learning environment is ready!")
 
 with col2:
     if st.button("🔄 Reset Session", help="Clear current session and start fresh", use_container_width=True):
-        # Save user credentials before clearing
         user_data = st.session_state.get("user_data")
         learner_id = st.session_state.get("learner_id")
         learner_schema = st.session_state.get("learner_schema")
         storage_api = st.session_state.get("storage_api")
         authenticated = st.session_state.get("authenticated")
         
-        # Clean up temp directory if exists
         if "dbt_dir" in st.session_state:
             dbt_dir = st.session_state["dbt_dir"]
             if os.path.exists(dbt_dir):
@@ -1728,18 +1547,22 @@ with col2:
                 except:
                     pass
         
-        # Clear all session state
         for key in list(st.session_state.keys()):
             st.session_state.pop(key)
         
-        # Restore user credentials
         st.session_state["authenticated"] = authenticated
         st.session_state["user_data"] = user_data
         st.session_state["learner_id"] = learner_id
         st.session_state["learner_schema"] = learner_schema
         st.session_state["storage_api"] = storage_api
         
+        # Clear caches
+        get_cached_progress.clear()
+        get_all_cached_progress.clear()
+        list_tables_cached.clear()
+        
         st.success("✅ Session reset! Environment cleared.")
+        time.sleep(1)
         st.rerun()
 
 # ====================================
@@ -1753,7 +1576,7 @@ if "dbt_dir" in st.session_state:
     ])
     
     # ====================================
-    # TAB 1: MODEL BUILDER & EXECUTOR
+    # TAB 1: MODEL BUILDER
     # ====================================
     with tab1:
         st.markdown("### 🧠 Explore & Edit Data Models")
@@ -1769,7 +1592,6 @@ if "dbt_dir" in st.session_state:
             st.warning("⚠️ No model files found for this lesson.")
             st.stop()
         
-        # Store original SQL in session state if not exists
         if "original_sql" not in st.session_state:
             st.session_state["original_sql"] = {}
         
@@ -1777,11 +1599,9 @@ if "dbt_dir" in st.session_state:
 
         model_path = os.path.join(model_dir, model_choice)
         
-        # Load and store original SQL on first load
         if model_choice not in st.session_state["original_sql"]:
             st.session_state["original_sql"][model_choice] = load_model_sql(model_path)
         
-        # Initialize the editor content
         if f"editor_{model_choice}" not in st.session_state:
             st.session_state[f"editor_{model_choice}"] = st.session_state["original_sql"][model_choice]
         
@@ -1801,26 +1621,25 @@ if "dbt_dir" in st.session_state:
                 st.session_state[f"editor_{model_choice}"] = edited_sql
                 update_progress(5, f"model_saved_{model_choice}")
                 st.success("✅ Model saved successfully!")
+                time.sleep(0.5)
         with col2:
             if st.button("🔄 Reset to Original", use_container_width=True, key=f"reset_{model_choice}"):
-                # Reset to original SQL
                 st.session_state[f"editor_{model_choice}"] = st.session_state["original_sql"][model_choice]
                 save_model_sql(model_path, st.session_state["original_sql"][model_choice])
                 st.success("✅ Model reset to original!")
+                time.sleep(0.5)
                 st.rerun()
 
         # ====================================
-        # RUN SEEDS AND MODELS
+        # EXECUTE MODELS
         # ====================================
-        st.markdown("### 🏃 Execute Your Data Pipeline")
+        st.markdown("### 🃏 Execute Your Data Pipeline")
         
         st.markdown("**📋 Select Models to Execute:**")
         
-        # Initialize session state
         if "selected_models" not in st.session_state:
             st.session_state["selected_models"] = {}
         
-        # Create checkboxes
         cols = st.columns(3)
         selected_models = []
         for idx, model_file in enumerate(model_files):
@@ -1836,7 +1655,6 @@ if "dbt_dir" in st.session_state:
                 if is_selected:
                     selected_models.append(model_name)
         
-        # Options
         col1, col2 = st.columns(2)
         with col1:
             include_children = st.checkbox(
@@ -1851,13 +1669,11 @@ if "dbt_dir" in st.session_state:
                 help="Perform full refresh of models"
             )
         
-        # Display selected
         if selected_models:
             st.info(f"📋 **Selected:** {', '.join(selected_models)}")
         else:
             st.warning("⚠️ No models selected. Please select at least one model.")
         
-        # Execute button
         if st.button("▶️ Execute Data Pipeline", 
                      key="run_dbt_btn", 
                      disabled=len(selected_models) == 0,
@@ -1878,7 +1694,7 @@ if "dbt_dir" in st.session_state:
 
             # Run models
             if selected_models:
-                with st.spinner(f"🏃 Executing {len(selected_models)} model(s)..."):
+                with st.spinner(f"🃏 Executing {len(selected_models)} model(s)..."):
                     refresh_flag = " --full-refresh" if full_refresh else ""
                     
                     for model_name in selected_models:
@@ -1893,34 +1709,33 @@ if "dbt_dir" in st.session_state:
                         with st.expander(f"{status_icon} Model: {model_name}", expanded=False):
                             st.code(run_logs, language="bash")
 
-                    # Update progress and track executed models
-                current_progress = UserManager.get_progress(username, lesson['id'])
-                if not current_progress:
-                    current_progress = {
-                        'lesson_progress': 0,
-                        'completed_steps': [],
-                        'models_executed': [],
-                        'queries_run': 0,
-                        'last_updated': None
-                    }
-                
-                if 'models_executed' not in current_progress:
-                    current_progress['models_executed'] = []
-                
-                # Add newly executed models
-                for model in selected_models:
-                    if model not in current_progress['models_executed']:
-                        current_progress['models_executed'].append(model)
-                
-                # Save the updated models list first
-                UserManager.save_progress(username, lesson['id'], current_progress)
-                
-                # Then update progress with increment
-                update_progress(30, "models_executed")
-                
-                st.session_state["dbt_ran"] = True
-                st.session_state["tables_list"] = list_tables(LEARNER_SCHEMA)
-                st.success(f"✅ Pipeline execution complete! Executed {len(selected_models)} model(s).")
+                    # Update progress
+                    current_progress = get_cached_progress(username, lesson['id'])
+                    if not current_progress:
+                        current_progress = {
+                            'lesson_progress': 0,
+                            'completed_steps': [],
+                            'models_executed': [],
+                            'queries_run': 0,
+                            'last_updated': None
+                        }
+                    
+                    if 'models_executed' not in current_progress:
+                        current_progress['models_executed'] = []
+                    
+                    for model in selected_models:
+                        if model not in current_progress['models_executed']:
+                            current_progress['models_executed'].append(model)
+                    
+                    UserManager.save_progress(username, lesson['id'], current_progress)
+                    update_progress(30, "models_executed")
+                    
+                    # Clear cache to reflect changes
+                    list_tables_cached.clear()
+                    
+                    st.session_state["dbt_ran"] = True
+                    st.session_state["tables_list"] = list_tables(LEARNER_SCHEMA)
+                    st.success(f"✅ Pipeline execution complete! Executed {len(selected_models)} model(s).")
         
         # ====================================
         # VALIDATION
@@ -1930,27 +1745,28 @@ if "dbt_dir" in st.session_state:
 
         with col1:
             if st.button("🏆 Validate Lesson Completion", use_container_width=True, type="secondary", key="validate_tab1"):
-                ok, result = validate_output(LEARNER_SCHEMA, lesson["validation"])
-                if ok:
-                    update_progress(35, "lesson_completed")
-                    st.balloons()
-                    st.success(f"""
-                    🎉 **Lesson Completed Successfully!**
-                    
-                    **Achievement:** {lesson['title']}  
-                    **Models Built:** {result.get('models_built', 'N/A')}  
-                    **Progress:** 100% Complete
-                    
-                    Well done! You've completed this lesson. 🏆
-                    """)
-                else:
-                    st.error(f"""
-                    ❌ **Lesson Validation Failed**
-                    
-                    **Details:** {result}
-                    
-                    Please ensure all required models are executed.
-                    """)
+                with st.spinner("🔍 Validating your work..."):
+                    ok, result = validate_output(LEARNER_SCHEMA, lesson["validation"])
+                    if ok:
+                        update_progress(35, "lesson_completed")
+                        st.balloons()
+                        st.success(f"""
+                        🎉 **Lesson Completed Successfully!**
+                        
+                        **Achievement:** {lesson['title']}  
+                        **Models Built:** {result.get('models_built', 'N/A')}  
+                        **Progress:** 100% Complete
+                        
+                        Well done! You've completed this lesson. 🏆
+                        """)
+                    else:
+                        st.error(f"""
+                        ❌ **Lesson Validation Failed**
+                        
+                        **Details:** {result}
+                        
+                        Please ensure all required models are executed.
+                        """)
 
         with col2:
             if st.session_state.get("dbt_ran", False):
@@ -1960,7 +1776,6 @@ if "dbt_dir" in st.session_state:
     # ====================================
     # TAB 2: SQL QUERY & VISUALIZATION
     # ====================================
-
     with tab2:
         if not st.session_state.get("dbt_ran", False):
             st.info("ℹ️ Please execute your dbt models in the **Build & Execute Models** tab first before querying data.")
@@ -1982,30 +1797,31 @@ if "dbt_dir" in st.session_state:
             if st.button("▶️ Execute Query", key="run_query_btn", use_container_width=True):
                 st.session_state["sql_query"] = query
                 try:
-                    con = get_duckdb_connection()
-                    con.execute(f"USE {MOTHERDUCK_SHARE}")
-                    con.execute(f"SET SCHEMA '{LEARNER_SCHEMA}'")
-                    df = con.execute(query).fetchdf()
-                    con.close()
-                    st.session_state["query_result"] = df
-                    
-                    # Track queries run
-                    current_progress = UserManager.get_progress(username, lesson['id'])
-                    if not current_progress:
-                        current_progress = {
-                            'lesson_progress': 0,
-                            'completed_steps': [],
-                            'models_executed': [],
-                            'queries_run': 0,
-                            'last_updated': None
-                        }
-                    
-                    current_progress['queries_run'] = current_progress.get('queries_run', 0) + 1
-                    UserManager.save_progress(username, lesson['id'], current_progress)
-                    
-                    update_progress(10, "query_executed")
-                    
-                    st.success("✅ Query executed successfully!")
+                    with st.spinner("⚡ Executing query..."):
+                        with conn_pool.get_connection() as con:
+                            con.execute(f"USE {MOTHERDUCK_SHARE}")
+                            con.execute(f"SET SCHEMA '{LEARNER_SCHEMA}'")
+                            df = con.execute(query).fetchdf()
+                        
+                        st.session_state["query_result"] = df
+                        
+                        # Track queries
+                        current_progress = get_cached_progress(username, lesson['id'])
+                        if not current_progress:
+                            current_progress = {
+                                'lesson_progress': 0,
+                                'completed_steps': [],
+                                'models_executed': [],
+                                'queries_run': 0,
+                                'last_updated': None
+                            }
+                        
+                        current_progress['queries_run'] = current_progress.get('queries_run', 0) + 1
+                        UserManager.save_progress(username, lesson['id'], current_progress)
+                        
+                        update_progress(10, "query_executed")
+                        
+                        st.success("✅ Query executed successfully!")
                 except Exception as e:
                     st.error(f"❌ Query Error: {e}")
 
@@ -2015,7 +1831,6 @@ if "dbt_dir" in st.session_state:
                 st.markdown("**📊 Query Results:**")
                 st.dataframe(df, use_container_width=True)
                 
-                # Stats
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Rows", len(df))
@@ -2024,7 +1839,6 @@ if "dbt_dir" in st.session_state:
                 with col3:
                     st.metric("Memory", f"{df.memory_usage(deep=True).sum() / 1024:.1f} KB")
 
-                # Visualization
                 st.markdown("**📈 Data Visualization:**")
                 all_columns = df.columns.tolist()
 
@@ -2057,7 +1871,7 @@ if "dbt_dir" in st.session_state:
                                 y=alt.Y(y_axis, type='nominal' if df[y_axis].dtype == 'object' else 'quantitative'),
                                 tooltip=all_columns
                             ).properties(height=400)
-                        else:  # Point
+                        else:
                             chart = alt.Chart(df).mark_point().encode(
                                 x=alt.X(x_axis, type='nominal' if df[x_axis].dtype == 'object' else 'quantitative'),
                                 y=alt.Y(y_axis, type='nominal' if df[y_axis].dtype == 'object' else 'quantitative'),
@@ -2070,34 +1884,23 @@ if "dbt_dir" in st.session_state:
                 else:
                     st.info("ℹ️ Need at least 2 columns for visualization")
 
-    
-    # ==============================================================================
+    # ====================================
     # TAB 3: PROGRESS DASHBOARD
-    # ==============================================================================
+    # ====================================
     with tab3:
         st.markdown("### 📈 Your Learning Journey")
         
-        # Reload current lesson progress
-        current_progress = UserManager.get_progress(username, lesson['id'])
+        current_progress = get_cached_progress(username, lesson['id'])
         if not current_progress:
             current_progress = {
                 'lesson_progress': 0,
                 'completed_steps': [],
                 'models_executed': [],
                 'queries_run': 0,
-                'quiz_answers': {},
-                'quiz_score': 0,
                 'last_updated': None
             }
         
-        # Calculate quiz stats
-        quiz_questions = lesson.get('quiz', [])
-        total_quiz_points = sum(q['points'] for q in quiz_questions) if quiz_questions else 0
-        quiz_score = current_progress.get('quiz_score', 0)
-        quiz_answers = current_progress.get('quiz_answers', {})
-        questions_correct = len([q for q in quiz_answers.values() if q.get('correct', False)])
-        
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Lesson Progress", f"{current_progress.get('lesson_progress', 0)}%")
         with col2:
@@ -2106,35 +1909,21 @@ if "dbt_dir" in st.session_state:
             st.metric("Models Executed", len(current_progress.get('models_executed', [])))
         with col4:
             st.metric("Queries Run", current_progress.get('queries_run', 0))
-        with col5:
-            st.metric("Quiz Score", f"{quiz_score}/{total_quiz_points}")
         
-        # Progress visualization
+        # Progress bar
         st.markdown("### 🎯 Lesson Progress")
-        progress_df = pd.DataFrame({
-            'Metric': ['Overall Progress'],
-            'Percentage': [current_progress.get('lesson_progress', 0)]
-        })
+        progress_value = current_progress.get('lesson_progress', 0)
+        st.progress(progress_value / 100)
         
-        chart = alt.Chart(progress_df).mark_bar(size=30).encode(
-            x=alt.X('Percentage:Q', scale=alt.Scale(domain=[0, 100]), title='Progress (%)'),
-            y=alt.Y('Metric:N', title=''),
-            color=alt.value('#3b82f6')
-        ).properties(height=100)
-        
-        st.altair_chart(chart, use_container_width=True)
-        
-        # Completed steps
         if current_progress.get('completed_steps'):
             st.markdown("### ✅ Completed Steps")
             for step in current_progress['completed_steps']:
                 st.markdown(f"- {step.replace('_', ' ').title()}")
         
-        # All lessons progress
+        # All lessons overview
         st.markdown("### 📚 All Lessons Overview")
-        all_progress = UserManager.get_all_progress(username)
+        all_progress = get_all_cached_progress(username)
         
-        # Check if there's any actual progress across all lessons
         has_progress = False
         if all_progress:
             for lesson_id, prog_data in all_progress.items():
@@ -2167,7 +1956,6 @@ if "dbt_dir" in st.session_state:
         else:
             st.info("📚 Start working on lessons to see your progress here!")
         
-        # Last updated
         if current_progress.get('last_updated'):
             try:
                 last_update = datetime.fromisoformat(current_progress['last_updated'])
@@ -2194,109 +1982,11 @@ if "dbt_dir" in st.session_state:
             **Schema:** `{user_data['schema']}`  
             **Member Since:** {created_str}
             """)
-        
-        # Debug section (expandable) - Only show in development
-        if os.environ.get("DEBUG_MODE", "false").lower() == "true":
-            with st.expander("🔍 Debug: View Raw Progress Data", expanded=False):
-                st.markdown("**Storage Backend:**")
-                st.code(f"MotherDuck Database: {MOTHERDUCK_SHARE}", language="text")
-                
-                st.markdown("**Current Lesson Progress:**")
-                st.json(current_progress)
-                
-                st.markdown("**All Lessons Progress:**")
-                all_progress_debug = UserManager.get_all_progress(username)
-                st.json(all_progress_debug if all_progress_debug else {})
-                
-                st.markdown("**Query Your Data:**")
-                st.code(f"""
--- View your progress
-SELECT * FROM {MOTHERDUCK_SHARE}.learner_progress 
-WHERE username = '{username}';
-
--- View your account
-SELECT username, email, schema_name, created_at 
-FROM {MOTHERDUCK_SHARE}.users 
-WHERE username = '{username}';
-                """, language="sql")
 
 # ====================================
 # FOOTER
 # ====================================
 st.markdown("---")
-
-# Storage info section
-# with st.expander("💾 Data Storage Information", expanded=False):
-#     st.markdown(f"""
-#     ### 🦆 Where Your Data is Stored
-    
-#     All user credentials and progress data are stored in **MotherDuck** (cloud DuckDB):
-    
-#     **Database:** `{MOTHERDUCK_SHARE}`
-    
-#     **Tables:**
-#     - `{MOTHERDUCK_SHARE}.users` - User accounts and credentials
-#     - `{MOTHERDUCK_SHARE}.learner_progress` - Lesson progress tracking
-    
-#     **Benefits:**
-#     - ✅ **Persistent**: Survives app deployments and restarts
-#     - ✅ **Secure**: Password hashing (SHA-256)
-#     - ✅ **Cloud-backed**: Data stored in MotherDuck cloud
-#     - ✅ **Accessible**: Query your data directly via MotherDuck console
-#     - ✅ **Reliable**: Automatic backups and high availability
-    
-#     **Database Schema:**
-#     ```sql
-#     -- Users table
-#     CREATE TABLE {MOTHERDUCK_SHARE}.users (
-#         username VARCHAR PRIMARY KEY,
-#         password_hash VARCHAR NOT NULL,
-#         email VARCHAR NOT NULL,
-#         schema_name VARCHAR NOT NULL,
-#         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-#     );
-    
-#     -- Progress table
-#     CREATE TABLE {MOTHERDUCK_SHARE}.learner_progress (
-#         username VARCHAR NOT NULL,
-#         lesson_id VARCHAR NOT NULL,
-#         lesson_progress INTEGER DEFAULT 0,
-#         completed_steps JSON,
-#         models_executed JSON,
-#         queries_run INTEGER DEFAULT 0,
-#         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#         PRIMARY KEY (username, lesson_id)
-#     );
-#     ```
-    
-#     **Access Your Data:**
-#     Visit [MotherDuck Console](https://app.motherduck.com/) and query:
-#     ```sql
-#     SELECT * FROM {MOTHERDUCK_SHARE}.users;
-#     SELECT * FROM {MOTHERDUCK_SHARE}.learner_progress;
-#     ```
-#     """)
-    
-#     # Show user stats
-#     try:
-#         con = st.session_state.storage_api._get_connection()
-        
-#         # Count total users
-#         user_count = con.execute(f"SELECT COUNT(*) FROM {MOTHERDUCK_SHARE}.users").fetchone()[0]
-        
-#         # Count progress records
-#         progress_count = con.execute(f"SELECT COUNT(*) FROM {MOTHERDUCK_SHARE}.learner_progress").fetchone()[0]
-        
-#         con.close()
-        
-#         col1, col2 = st.columns(2)
-#         with col1:
-#             st.metric("Total Users", user_count)
-#         with col2:
-#             st.metric("Progress Records", progress_count)
-#     except Exception as e:
-#         st.warning(f"Unable to fetch stats: {e}")
-
 st.markdown("""
 <div style="text-align: center; color: #64748b; padding: 1rem 0;">
     <p style="margin: 0;">Decode data - Interactive Learning Platform</p>
