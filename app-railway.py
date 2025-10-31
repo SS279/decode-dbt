@@ -1614,6 +1614,8 @@ if all_progress and any(p.get('lesson_progress', 0) > 0 for p in all_progress.va
             lesson_prog = all_progress.get(lesson_item['id'], {}).get('lesson_progress', 0)
             st.metric(lesson_item['title'].split()[1], f"{lesson_prog}%")
 
+# Replace the ENHANCED LESSON SELECTION section (around line 1050-1200) with this fixed version:
+
 # ====================================
 # ENHANCED LESSON SELECTION
 # ====================================
@@ -1673,6 +1675,7 @@ lesson_metadata = {
 if 'selected_lesson' not in st.session_state:
     st.session_state['selected_lesson'] = None
 
+# Get current lesson reference
 lesson = st.session_state.get('selected_lesson')
 
 # Display categories
@@ -1713,33 +1716,54 @@ for category in lesson_categories:
             # Check if this is the selected lesson
             is_selected = lesson and lesson['id'] == lesson_item['id']
             
-            # Use a container for the card
+            # Create a unique container key for each lesson card
             with st.container():
                 # Icon and title
-                col_icon, col_title = st.columns([1, 4])
-                with col_icon:
-                    st.markdown(f"<div style='font-size: 3rem; text-align: center;'>{lesson_item['title'].split()[0]}</div>", unsafe_allow_html=True)
-                with col_title:
-                    title_text = ' '.join(lesson_item['title'].split()[1:])
-                    if is_selected:
-                        st.markdown(f"**{title_text}** ✅")
-                    else:
-                        st.markdown(f"**{title_text}**")
-                    st.caption(lesson_item['description'])
-                
-                # Metadata badges
-                col_diff, col_time = st.columns(2)
-                with col_diff:
-                    diff_emoji = {"Beginner": "🟢", "Intermediate": "🟡", "Advanced": "🔴"}
-                    st.markdown(f"{diff_emoji.get(metadata.get('difficulty', 'Beginner'), '⚪')} {metadata.get('difficulty', 'Beginner')}")
-                with col_time:
-                    st.markdown(f"⏱️ {metadata.get('duration', '30 min')}")
+                st.markdown(f"""
+                <div style="
+                    background: white;
+                    border: 2px solid {category['border_color']};
+                    border-radius: 12px;
+                    padding: 1.5rem;
+                    margin-bottom: 1rem;
+                    transition: all 0.3s ease;
+                ">
+                    <div style="display: flex; align-items: start; gap: 1rem;">
+                        <div style="font-size: 2.5rem;">{lesson_item['title'].split()[0]}</div>
+                        <div style="flex: 1;">
+                            <h4 style="color: {category['color']}; margin: 0 0 0.5rem 0; font-size: 1.2rem;">
+                                {' '.join(lesson_item['title'].split()[1:])}
+                                {' ✅' if is_selected else ''}
+                            </h4>
+                            <p style="color: #64748b; margin: 0 0 1rem 0; font-size: 0.9rem;">
+                                {lesson_item['description']}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                        <span style="background: {category['bg_color']}; color: {category['color']}; 
+                                     padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                            {'🟢' if metadata.get('difficulty') == 'Beginner' else '🟡' if metadata.get('difficulty') == 'Intermediate' else '🔴'} 
+                            {metadata.get('difficulty', 'Beginner')}
+                        </span>
+                        <span style="background: {category['bg_color']}; color: {category['color']}; 
+                                     padding: 0.25rem 0.75rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                            ⏱️ {metadata.get('duration', '30 min')}
+                        </span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 # Topics
                 if metadata.get('topics'):
-                    st.markdown("**Topics:**")
-                    topics_html = " ".join([f"<span style='background: {category['bg_color']}; color: {category['color']}; padding: 0.25rem 0.5rem; border-radius: 8px; font-size: 0.75rem; margin-right: 0.25rem;'>{topic}</span>" for topic in metadata['topics']])
-                    st.markdown(topics_html, unsafe_allow_html=True)
+                    topics_html = " ".join([
+                        f"<span style='background: {category['bg_color']}; color: {category['color']}; "
+                        f"padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.75rem; "
+                        f"margin-right: 0.25rem; display: inline-block; margin-bottom: 0.25rem;'>{topic}</span>" 
+                        for topic in metadata['topics']
+                    ])
+                    st.markdown(f"**Topics:** {topics_html}", unsafe_allow_html=True)
                 
                 # Progress bar
                 if lesson_prog > 0:
@@ -1752,14 +1776,18 @@ for category in lesson_categories:
                 button_text = "✓ Selected" if is_selected else ("Continue Learning" if lesson_prog > 0 else "Start Lesson")
                 button_type = "primary" if not is_selected else "secondary"
                 
-                if st.button(button_text, key=f"select_{lesson_item['id']}", use_container_width=True, type=button_type, disabled=is_selected):
+                if st.button(
+                    button_text, 
+                    key=f"select_{lesson_item['id']}", 
+                    use_container_width=True, 
+                    type=button_type, 
+                    disabled=is_selected
+                ):
                     st.session_state['selected_lesson'] = lesson_item
                     lesson = lesson_item
                     st.rerun()
-                
-                st.markdown("---")
 
-# Process selected lesson (maintains your original functionality)
+# Process selected lesson
 if lesson:
     # Load lesson progress from storage
     current_progress = UserManager.get_progress(username, lesson['id'])
@@ -1780,9 +1808,32 @@ if lesson:
     if "current_lesson" not in st.session_state or st.session_state.current_lesson != lesson["id"]:
         st.session_state.current_lesson = lesson["id"]
     
-    # Show selected lesson summary
-    st.info(f"📚 **Selected:** {lesson['title']} - {lesson_metadata[lesson['id']]['difficulty']} ({lesson_metadata[lesson['id']]['duration']})")
-
+    # Show selected lesson summary with better styling
+    metadata = lesson_metadata.get(lesson['id'], {})
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+        border: 2px solid rgba(59, 130, 246, 0.3);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin: 1rem 0;
+    ">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <span style="font-size: 2rem;">{lesson['title'].split()[0]}</span>
+            <div>
+                <h4 style="color: #3b82f6; margin: 0; font-size: 1.1rem;">
+                    Selected: {lesson['title']}
+                </h4>
+                <p style="color: #64748b; margin: 0.25rem 0 0 0; font-size: 0.9rem;">
+                    {metadata.get('difficulty', 'Beginner')} • {metadata.get('duration', '30 min')}
+                </p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.info("👆 Please select a lesson above to get started!")
+    
 # ====================================
 # SANDBOX SETUP
 # ====================================
