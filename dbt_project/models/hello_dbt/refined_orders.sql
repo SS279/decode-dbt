@@ -2,7 +2,7 @@
 
 -- Step 2: Refine data to remove incomplete or refunded orders
 SELECT
-    order_id,
+    order_id
     , customer_id
     , customer_name
     , order_date
