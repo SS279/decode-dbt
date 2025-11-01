@@ -1,7 +1,7 @@
-order_id,customer_id,order_date,amount,status
-1,101,2024-01-01,120,completed
-2,102,2024-01-03,250,completed
-3,103,2024-01-05,80,refunded
-4,101,2024-01-07,150,completed
-5,104,2024-01-09,60,pending
-6,105,2024-01-10,300,completed
+order_id,customer_name,customer_id,order_date,amount,status
+1,Alice,101,2024-01-01,120,completed
+2,Bob,102,2024-01-03,250,completed
+3,Charlie,103,2024-01-05,80,refunded
+4,DJ,101,2024-01-07,150,completed
+5,Emily,104,2024-01-09,60,pending
+6,Frank,105,2024-01-10,300,completed
